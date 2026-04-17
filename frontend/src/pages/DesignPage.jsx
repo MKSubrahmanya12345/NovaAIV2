@@ -4,6 +4,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useThemeStore } from "../store/useThemeStore";
 import DesignChat from "../components/DesignChat";
+import useVoiceGuidance from "../hooks/useVoiceGuidance";
 
 const defaultWokwiUrl = "";
 
@@ -15,6 +16,7 @@ const getInitialProject = (locationState) => {
 
 const getDraftStorageKey = (projectId) => `hardcode:design:draft:${projectId}`;
 const getWokwiUrlStorageKey = (projectId) => `hardcode:design:wokwi-url:${projectId}`;
+const getVoiceStorageKey = (projectId) => `hardcode:design:voice:${projectId}`;
 
 export default function DesignPage() {
   const { id } = useParams();
@@ -22,6 +24,7 @@ export default function DesignPage() {
   const navigate = useNavigate();
   const containerRef = useRef(null);
   const draggingRef = useRef(false);
+  const lastVoiceErrorRef = useRef({ code: "", at: 0 });
 
   const { theme, toggleTheme } = useThemeStore();
   const isDark = theme === "dark";
@@ -35,11 +38,65 @@ export default function DesignPage() {
   const [wokwiContext, setWokwiContext] = useState({ connected: false, reason: "No live circuit context" });
   const [draftRestored, setDraftRestored] = useState(false);
   const [wokwiUrlFallback, setWokwiUrlFallback] = useState("");
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [speechRate, setSpeechRate] = useState(0.9);
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [localRunLoading, setLocalRunLoading] = useState(false);
+  const [useLocalPreview, setUseLocalPreview] = useState(true);
+  const [localScreenshotUrl, setLocalScreenshotUrl] = useState("");
 
   const designState = project?.designState || {};
   const ideaState = project?.ideaState || {};
   const componentsState = project?.componentsState || {};
   const wokwiUrl = project?.wokwiUrl || project?.designState?.wokwiUrl || wokwiUrlFallback || defaultWokwiUrl;
+
+  const {
+    isVoiceSupported,
+    isRecognitionSupported,
+    status: voiceStatus,
+    speakText,
+    startListening,
+    stopListening,
+    pauseForTyping,
+  } = useVoiceGuidance({
+    enabled: voiceEnabled,
+    rate: speechRate,
+    handsFree: handsFreeMode,
+    onFinalTranscript: ({ text, autoSend }) => {
+      if (!text) return;
+
+      setInput(text);
+
+      if (autoSend) {
+        pushAssistantMessage(text);
+      }
+    },
+    onInterimTranscript: (text) => {
+      if (!handsFreeMode || !text) return;
+      setInput(text);
+    },
+    onError: (error) => {
+      const payload =
+        typeof error === "string"
+          ? { code: "unknown_error", message: error, recoverable: false }
+          : (error || { code: "unknown_error", message: "Voice error", recoverable: false });
+
+      const now = Date.now();
+      const recent = lastVoiceErrorRef.current;
+      if (recent.code === payload.code && now - recent.at < 3500) {
+        return;
+      }
+
+      lastVoiceErrorRef.current = { code: payload.code, at: now };
+
+      if (payload.code === "network" && payload.recoverable) {
+        toast.error("Microphone connection dropped. Retrying automatically...");
+        return;
+      }
+
+      toast.error(payload.message || "Voice guidance error");
+    }
+  });
 
   useEffect(() => {
     if (!id) return;
@@ -95,6 +152,31 @@ export default function DesignPage() {
     if (!id) return;
 
     try {
+      const rawVoice = localStorage.getItem(getVoiceStorageKey(id));
+      if (!rawVoice) return;
+
+      const parsed = JSON.parse(rawVoice);
+
+      if (typeof parsed?.voiceEnabled === "boolean") {
+        setVoiceEnabled(parsed.voiceEnabled);
+      }
+
+      if (typeof parsed?.handsFreeMode === "boolean") {
+        setHandsFreeMode(parsed.handsFreeMode);
+      }
+
+      if (typeof parsed?.speechRate === "number") {
+        setSpeechRate(clamp(parsed.speechRate, 0.7, 1.2));
+      }
+    } catch {
+      // Ignore malformed voice settings.
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    try {
       const payload = {
         input,
         leftPanelWidth,
@@ -105,6 +187,22 @@ export default function DesignPage() {
       // localStorage can fail in strict browser modes.
     }
   }, [id, input, leftPanelWidth]);
+
+  useEffect(() => {
+    if (!id) return;
+
+    try {
+      const payload = {
+        voiceEnabled,
+        handsFreeMode,
+        speechRate,
+        updatedAt: Date.now()
+      };
+      localStorage.setItem(getVoiceStorageKey(id), JSON.stringify(payload));
+    } catch {
+      // localStorage can fail in strict browser modes.
+    }
+  }, [id, handsFreeMode, speechRate, voiceEnabled]);
 
   useEffect(() => {
     if (!id) return;
@@ -192,6 +290,7 @@ export default function DesignPage() {
         );
 
         setMessages([{ role: "ai", content: res.data.reply }]);
+        speakText(res.data.reply);
         setProject(prev => prev ? { ...prev, designState: res.data.designState } : prev);
         if (res.data?.wokwiContext) {
           setWokwiContext(res.data.wokwiContext);
@@ -200,13 +299,14 @@ export default function DesignPage() {
         const errorMessage = err?.response?.data?.error || "Unable to start Design AI";
         toast.error(errorMessage);
         setMessages([{ role: "ai", content: errorMessage }]);
+        speakText(errorMessage);
       } finally {
         setLoading(false);
       }
     };
 
     bootDesign();
-  }, [id, booting, messages.length]);
+  }, [id, booting, messages.length, speakText]);
 
   useEffect(() => {
     const loadLiveContext = async () => {
@@ -245,6 +345,7 @@ export default function DesignPage() {
       );
 
       setMessages(prev => [...prev, { role: "ai", content: res.data.reply }]);
+      speakText(res.data.reply);
       setProject(prev => prev ? { ...prev, designState: res.data.designState } : prev);
       if (res.data?.wokwiContext) {
         setWokwiContext(res.data.wokwiContext);
@@ -253,6 +354,7 @@ export default function DesignPage() {
       const errorMessage = err?.response?.data?.error || "Design chat failed";
       toast.error(errorMessage);
       setMessages(prev => [...prev, { role: "ai", content: errorMessage }]);
+      speakText(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -262,10 +364,65 @@ export default function DesignPage() {
     pushAssistantMessage(input);
   };
 
+  const handleInputChange = (nextInput) => {
+    pauseForTyping();
+    setInput(nextInput);
+  };
+
   const handleDebug = () => {
     pushAssistantMessage(
       "Debug the current design context. Summarize the active Wokwi layout, list missing parts, and give the next manual step only. Keep it concise."
     );
+  };
+
+  const handleToggleVoice = () => {
+    if (!isVoiceSupported) {
+      toast.error("Voice is not supported in this browser");
+      return;
+    }
+
+    setVoiceEnabled((prev) => {
+      const next = !prev;
+
+      if (!next) {
+        stopListening();
+      } else if (handsFreeMode && isRecognitionSupported) {
+        startListening();
+      }
+
+      return next;
+    });
+  };
+
+  const handleToggleHandsFree = () => {
+    if (!isRecognitionSupported) {
+      toast.error("Speech recognition is not supported in this browser");
+      return;
+    }
+
+    if (!voiceEnabled) {
+      setVoiceEnabled(true);
+    }
+
+    setHandsFreeMode((prev) => !prev);
+  };
+
+  const handleMicToggle = () => {
+    if (!isRecognitionSupported) {
+      toast.error("Speech recognition is not supported in this browser");
+      return;
+    }
+
+    if (!voiceEnabled) {
+      setVoiceEnabled(true);
+    }
+
+    if (voiceStatus === "listening" || voiceStatus === "duplex") {
+      stopListening();
+      return;
+    }
+
+    startListening();
   };
 
   const handleDividerPointerDown = () => {
@@ -318,6 +475,110 @@ export default function DesignPage() {
     }
   };
 
+  const handleLocalCompileRun = async () => {
+    if (!id || localRunLoading) return;
+
+    const projectPath = (project?.wokwiProjectPath || "").trim();
+    if (!projectPath) {
+      toast.error("Local project path is not set. Save wokwiProjectPath in project settings first.");
+      return;
+    }
+
+    try {
+      setLocalRunLoading(true);
+
+      const filesRes = await axios.post(
+        "http://localhost:5000/api/wokwi/local/files",
+        {
+          projectId: id,
+          projectPath,
+          diagramFile: "diagram.json",
+          sketchFile: "sketch.ino"
+        },
+        { withCredentials: true }
+      );
+
+      const rawDiagram = filesRes.data?.diagramJson || "";
+      const sketchCode = filesRes.data?.sketchCode || "";
+
+      let parsedDiagram = null;
+      try {
+        parsedDiagram = JSON.parse(rawDiagram);
+      } catch {
+        throw new Error("Local diagram.json is invalid JSON");
+      }
+
+      const runRes = await axios.post(
+        "http://localhost:5000/api/wokwi/local/sync-run",
+        {
+          projectId: id,
+          projectPath,
+          diagramFile: "diagram.json",
+          sketchFile: "sketch.ino",
+          diagramJson: parsedDiagram,
+          sketchCode,
+          fqbn: "arduino:avr:uno",
+          timeoutMs: 20000,
+          compileTimeoutMs: 180000,
+          captureScreenshot: true,
+          screenshotTime: 1200,
+          expectText: "BOOT_OK",
+          failText: ""
+        },
+        { withCredentials: true }
+      );
+
+      const runSummary = runRes.data?.runResult?.summary || "Local compile/run completed";
+      const serialTail = runRes.data?.runResult?.serialTail || "";
+      const screenshotUrl = runRes.data?.screenshotUrl
+        ? `http://localhost:5000${runRes.data.screenshotUrl}?t=${Date.now()}`
+        : "";
+
+      if (screenshotUrl) {
+        setLocalScreenshotUrl(screenshotUrl);
+        setUseLocalPreview(true);
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          content: `Local runner status: ${runSummary}${serialTail ? `\n\nSerial:\n${serialTail}` : ""}`
+        }
+      ]);
+
+      const contextRes = await axios.get(
+        `http://localhost:5000/api/design/context/${id}`,
+        { withCredentials: true }
+      );
+
+      if (contextRes.data?.wokwiContext) {
+        setWokwiContext(contextRes.data.wokwiContext);
+      }
+
+      toast.success("Local sync + compile + run passed");
+    } catch (err) {
+      const responseData = err?.response?.data || {};
+      const message =
+        responseData?.error ||
+        responseData?.compileResult?.summary ||
+        responseData?.runResult?.summary ||
+        err?.message ||
+        "Local compile/run failed";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          content: `Local runner failed: ${message}`
+        }
+      ]);
+      toast.error(message);
+    } finally {
+      setLocalRunLoading(false);
+    }
+  };
+
   return (
     <div className={`h-screen overflow-hidden ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
       <div className="mx-auto flex h-full w-full max-w-screen-2xl flex-col gap-3 px-4 py-4 lg:px-5">
@@ -346,6 +607,21 @@ export default function DesignPage() {
               className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
             >
               Set Wokwi URL
+            </button>
+
+            <button
+              onClick={handleLocalCompileRun}
+              disabled={localRunLoading || loading}
+              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? "bg-emerald-700 hover:bg-emerald-600" : "bg-emerald-600 text-white hover:bg-emerald-700"} ${(localRunLoading || loading) ? "cursor-not-allowed opacity-60" : ""}`}
+            >
+              {localRunLoading ? "Running Local..." : "Run Local Build"}
+            </button>
+
+            <button
+              onClick={() => setUseLocalPreview((prev) => !prev)}
+              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
+            >
+              {useLocalPreview ? "Show Wokwi URL" : "Show Local Preview"}
             </button>
 
             <button
@@ -378,7 +654,22 @@ export default function DesignPage() {
               </div>
 
               <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e] p-2">
-                {wokwiUrl ? (
+                {useLocalPreview && localScreenshotUrl ? (
+                  <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black">
+                    <img
+                      alt="Local simulation preview"
+                      src={localScreenshotUrl}
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+                ) : useLocalPreview ? (
+                  <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black px-6 text-center">
+                    <p className="text-sm text-white/70">
+                      Local preview mode is active. Click Run Local Build to generate an updated preview,
+                      or switch to Show Wokwi URL if you want to open the cloud simulator.
+                    </p>
+                  </div>
+                ) : wokwiUrl ? (
                   <iframe
                     title="Wokwi simulator"
                     src={wokwiUrl}
@@ -415,10 +706,20 @@ export default function DesignPage() {
                 wokwiContext={wokwiContext}
                 messages={messages}
                 input={input}
-                setInput={setInput}
+                setInput={handleInputChange}
                 loading={loading}
                 onSend={handleSend}
                 onDebug={handleDebug}
+                voiceEnabled={voiceEnabled}
+                handsFreeMode={handsFreeMode}
+                speechRate={speechRate}
+                setSpeechRate={setSpeechRate}
+                voiceStatus={voiceStatus}
+                voiceSupported={isVoiceSupported}
+                recognitionSupported={isRecognitionSupported}
+                onToggleVoice={handleToggleVoice}
+                onToggleHandsFree={handleToggleHandsFree}
+                onMicToggle={handleMicToggle}
               />
             </div>
           </section>

@@ -6,6 +6,9 @@ import {
   runScenarioWokwi,
   captureSerialWokwi,
   getWokwiEvidence,
+  getLocalWokwiFiles,
+  syncCompileRunWokwi,
+  getLocalWokwiScreenshot,
   startInteractiveMcpSession,
   callInteractiveMcpTool,
   stopInteractiveMcpSession,
@@ -18,6 +21,9 @@ router.post("/wokwi/lint", protectRoute, lintProjectWokwi);
 router.post("/wokwi/run", protectRoute, runProjectWokwi);
 router.post("/wokwi/scenario", protectRoute, runScenarioWokwi);
 router.post("/wokwi/serial/capture", protectRoute, captureSerialWokwi);
+router.post("/wokwi/local/files", protectRoute, getLocalWokwiFiles);
+router.post("/wokwi/local/sync-run", protectRoute, syncCompileRunWokwi);
+router.get("/wokwi/local/screenshot/:projectId", protectRoute, getLocalWokwiScreenshot);
 router.get("/wokwi/evidence/:projectId", protectRoute, getWokwiEvidence);
 
 router.post("/wokwi/mcp/session/start", protectRoute, startInteractiveMcpSession);

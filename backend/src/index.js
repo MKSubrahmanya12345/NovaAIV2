@@ -16,8 +16,26 @@ import wokwiRoutes from "./routes/wokwi.route.js";
 
 
 const app = express();
+const allowedOrigins = new Set([
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174"
+]);
+
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin(origin, callback) {
+    // Allow server-to-server or non-browser tools without Origin header.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.has(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true
 }));
 app.use(cookieParser());

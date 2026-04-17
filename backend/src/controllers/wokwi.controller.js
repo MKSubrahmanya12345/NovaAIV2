@@ -1,4 +1,7 @@
 import mongoose from "mongoose";
+import { existsSync } from "node:fs";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
 import Project from "../models/project.model.js";
 import {
   lintWokwiProject,
@@ -12,6 +15,11 @@ import {
   callWokwiMcpTool,
   stopWokwiMcpSession
 } from "../services/wokwi-mcp-client.service.js";
+import {
+  writeWokwiProjectFiles,
+  compileWokwiSketch,
+  readWokwiProjectFiles
+} from "../services/wokwi-local.service.js";
 
 const ensureProjectAccess = async (projectId, userId) => {
   if (!mongoose.Types.ObjectId.isValid(projectId)) {
@@ -279,5 +287,165 @@ export const listInteractiveMcpSessions = async (_req, res) => {
     res.json({ sessions: listWokwiMcpSessions() });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to list MCP sessions" });
+  }
+};
+
+export const getLocalWokwiFiles = async (req, res) => {
+  try {
+    const { projectId, projectPath = "", diagramFile = "diagram.json", sketchFile = "sketch.ino" } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+    const files = await readWokwiProjectFiles({
+      projectPath: resolvedPath,
+      diagramFile,
+      sketchFile
+    });
+
+    res.json({
+      projectId,
+      projectPath: resolvedPath,
+      ...files
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load local Wokwi files" });
+  }
+};
+
+export const syncCompileRunWokwi = async (req, res) => {
+  try {
+    const {
+      projectId,
+      projectPath = "",
+      diagramJson,
+      sketchCode,
+      diagramFile = "diagram.json",
+      sketchFile = "sketch.ino",
+      fqbn = "arduino:avr:uno",
+      timeoutMs = 30000,
+      compileTimeoutMs = 180000,
+      expectText = "",
+      failText = "",
+      captureScreenshot = false,
+      screenshotTime = 1200
+    } = req.body;
+
+    if (typeof sketchCode !== "string") {
+      return res.status(400).json({ error: "sketchCode is required" });
+    }
+
+    if (diagramJson === undefined || diagramJson === null) {
+      return res.status(400).json({ error: "diagramJson is required" });
+    }
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+
+    if (!resolvedPath) {
+      return res.status(400).json({ error: "projectPath is required" });
+    }
+
+    const writeResult = await writeWokwiProjectFiles({
+      projectPath: resolvedPath,
+      diagramJson,
+      sketchCode,
+      diagramFile,
+      sketchFile
+    });
+
+    const compileResult = await compileWokwiSketch({
+      projectPath: resolvedPath,
+      sketchFile,
+      fqbn,
+      timeoutMs: compileTimeoutMs
+    });
+
+    if (!compileResult.ok) {
+      return res.status(400).json({
+        projectId,
+        projectPath: resolvedPath,
+        stage: "compile",
+        writeResult,
+        compileResult
+      });
+    }
+
+    const resolvedExpectText = expectText?.trim() || "BOOT_OK";
+
+    if (resolvedExpectText && !sketchCode.includes(resolvedExpectText)) {
+      return res.status(400).json({
+        projectId,
+        projectPath: resolvedPath,
+        stage: "validation",
+        error: `Expected text \"${resolvedExpectText}\" was not found in sketchCode. Add Serial.println(\"${resolvedExpectText}\") in setup() or update Expect text.`
+      });
+    }
+
+    const artifactsDir = path.join(resolvedPath, ".hardcode");
+    let screenshotFile = "";
+    if (captureScreenshot) {
+      await mkdir(artifactsDir, { recursive: true });
+      screenshotFile = path.join(artifactsDir, "latest-screenshot.png");
+    }
+
+    const runResult = await runWokwiProject({
+      projectPath: resolvedPath,
+      timeoutMs,
+      expectText: resolvedExpectText,
+      failText,
+      screenshotTime: captureScreenshot ? Number(screenshotTime) || 1200 : undefined,
+      screenshotFile
+    });
+
+    await saveEvidence(project, "lastRun", runResult);
+
+    res.json({
+      projectId,
+      projectPath: resolvedPath,
+      stage: "run",
+      writeResult,
+      compileResult,
+      runResult,
+      screenshotAvailable: Boolean(captureScreenshot && existsSync(screenshotFile)),
+      screenshotUrl: captureScreenshot ? `/api/wokwi/local/screenshot/${projectId}` : ""
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed local sync/compile/run" });
+  }
+};
+
+export const getLocalWokwiScreenshot = async (req, res) => {
+  try {
+    const { projectId } = req.params;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = project.wokwiProjectPath || "";
+    if (!resolvedPath) {
+      return res.status(400).json({ error: "wokwiProjectPath is not configured" });
+    }
+
+    const screenshotPath = path.join(resolvedPath, ".hardcode", "latest-screenshot.png");
+    if (!existsSync(screenshotPath)) {
+      return res.status(404).json({ error: "No local screenshot available yet" });
+    }
+
+    res.sendFile(screenshotPath);
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to load local screenshot" });
   }
 };

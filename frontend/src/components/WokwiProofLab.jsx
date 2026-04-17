@@ -65,11 +65,18 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
 
   const [localProjectPath, setLocalProjectPath] = useState(projectSnapshot?.wokwiProjectPath || "");
   const [diagramFile, setDiagramFile] = useState("diagram.json");
+  const [sketchFile, setSketchFile] = useState("sketch.ino");
+  const [fqbn, setFqbn] = useState("arduino:avr:uno");
+  const [compileTimeoutMs, setCompileTimeoutMs] = useState(180000);
   const [scenarioPath, setScenarioPath] = useState("smoke.test.yaml");
   const [timeoutMs, setTimeoutMs] = useState(20000);
   const [expectText, setExpectText] = useState("");
   const [failText, setFailText] = useState("");
   const [serialTimeoutMs, setSerialTimeoutMs] = useState(12000);
+  const [diagramText, setDiagramText] = useState("{\n  \"version\": 1,\n  \"author\": \"HardCode\",\n  \"editor\": \"wokwi\",\n  \"parts\": [],\n  \"connections\": []\n}\n");
+  const [sketchText, setSketchText] = useState("void setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  delay(500);\n}\n");
+  const [diagramDirty, setDiagramDirty] = useState(false);
+  const [sketchDirty, setSketchDirty] = useState(false);
 
   const [evidence, setEvidence] = useState(null);
   const [lastResult, setLastResult] = useState(null);
@@ -96,11 +103,16 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
 
       if (typeof parsed?.localProjectPath === "string") setLocalProjectPath(parsed.localProjectPath);
       if (typeof parsed?.diagramFile === "string") setDiagramFile(parsed.diagramFile);
+      if (typeof parsed?.sketchFile === "string") setSketchFile(parsed.sketchFile);
+      if (typeof parsed?.fqbn === "string") setFqbn(parsed.fqbn);
+      if (typeof parsed?.compileTimeoutMs === "number") setCompileTimeoutMs(parsed.compileTimeoutMs);
       if (typeof parsed?.scenarioPath === "string") setScenarioPath(parsed.scenarioPath);
       if (typeof parsed?.timeoutMs === "number") setTimeoutMs(parsed.timeoutMs);
       if (typeof parsed?.expectText === "string") setExpectText(parsed.expectText);
       if (typeof parsed?.failText === "string") setFailText(parsed.failText);
       if (typeof parsed?.serialTimeoutMs === "number") setSerialTimeoutMs(parsed.serialTimeoutMs);
+      if (typeof parsed?.diagramText === "string") setDiagramText(parsed.diagramText);
+      if (typeof parsed?.sketchText === "string") setSketchText(parsed.sketchText);
       if (typeof parsed?.mcpSessionId === "string") setMcpSessionId(parsed.mcpSessionId);
       if (typeof parsed?.selectedTool === "string") setSelectedTool(parsed.selectedTool);
       if (typeof parsed?.toolArgsText === "string") setToolArgsText(parsed.toolArgsText);
@@ -118,11 +130,16 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
       const payload = {
         localProjectPath,
         diagramFile,
+        sketchFile,
+        fqbn,
+        compileTimeoutMs,
         scenarioPath,
         timeoutMs,
         expectText,
         failText,
         serialTimeoutMs,
+        diagramText,
+        sketchText,
         mcpSessionId,
         selectedTool,
         toolArgsText,
@@ -137,11 +154,16 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
     projectId,
     localProjectPath,
     diagramFile,
+    sketchFile,
+    fqbn,
+    compileTimeoutMs,
     scenarioPath,
     timeoutMs,
     expectText,
     failText,
     serialTimeoutMs,
+    diagramText,
+    sketchText,
     mcpSessionId,
     selectedTool,
     toolArgsText
@@ -155,11 +177,16 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
         const payload = {
           localProjectPath,
           diagramFile,
+          sketchFile,
+          fqbn,
+          compileTimeoutMs,
           scenarioPath,
           timeoutMs,
           expectText,
           failText,
           serialTimeoutMs,
+          diagramText,
+          sketchText,
           mcpSessionId,
           selectedTool,
           toolArgsText,
@@ -178,11 +205,16 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
     projectId,
     localProjectPath,
     diagramFile,
+    sketchFile,
+    fqbn,
+    compileTimeoutMs,
     scenarioPath,
     timeoutMs,
     expectText,
     failText,
     serialTimeoutMs,
+    diagramText,
+    sketchText,
     mcpSessionId,
     selectedTool,
     toolArgsText
@@ -224,6 +256,136 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
     refreshEvidence();
     refreshSessions();
   }, [projectId]);
+
+  const loadLocalFiles = async () => {
+    if (!projectId) return;
+
+    try {
+      setRunningAction("Load local files");
+      const res = await axios.post(
+        "http://localhost:5000/api/wokwi/local/files",
+        {
+          projectId,
+          projectPath: localProjectPath.trim(),
+          diagramFile: diagramFile.trim() || "diagram.json",
+          sketchFile: sketchFile.trim() || "sketch.ino"
+        },
+        baseConfig
+      );
+
+      if (typeof res.data?.diagramJson === "string" && res.data.diagramJson) {
+        setDiagramText(res.data.diagramJson);
+        setDiagramDirty(false);
+      }
+
+      if (typeof res.data?.sketchCode === "string" && res.data.sketchCode) {
+        setSketchText(res.data.sketchCode);
+        setSketchDirty(false);
+      }
+
+      setLastResult(res.data);
+      toast.success("Loaded local diagram/sketch");
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to load local files");
+      setLastResult(err?.response?.data || { error: "Failed to load local files" });
+    } finally {
+      setRunningAction("");
+    }
+  };
+
+  const syncCompileRun = async () => {
+    if (!projectId) return;
+
+    let diagramPayload = diagramText;
+    let sketchPayload = sketchText;
+
+    // Use latest on-disk files unless user explicitly edited that textarea.
+    if (!diagramDirty || !sketchDirty) {
+      try {
+        const localRes = await axios.post(
+          "http://localhost:5000/api/wokwi/local/files",
+          {
+            projectId,
+            projectPath: localProjectPath.trim(),
+            diagramFile: diagramFile.trim() || "diagram.json",
+            sketchFile: sketchFile.trim() || "sketch.ino"
+          },
+          baseConfig
+        );
+
+        if (!diagramDirty && typeof localRes.data?.diagramJson === "string" && localRes.data.diagramJson) {
+          diagramPayload = localRes.data.diagramJson;
+          setDiagramText(localRes.data.diagramJson);
+          setDiagramDirty(false);
+        }
+
+        if (!sketchDirty && typeof localRes.data?.sketchCode === "string" && localRes.data.sketchCode) {
+          sketchPayload = localRes.data.sketchCode;
+          setSketchText(localRes.data.sketchCode);
+          setSketchDirty(false);
+        }
+      } catch {
+        // Best effort sync from disk; continue with in-memory payload.
+      }
+    }
+
+    const parsedDiagram = parseJsonSafe(diagramPayload, null);
+    if (!parsedDiagram) {
+      toast.error("diagram.json is not valid JSON");
+      return;
+    }
+
+    try {
+      setRunningAction("Sync+Compile+Run");
+      const res = await axios.post(
+        "http://localhost:5000/api/wokwi/local/sync-run",
+        {
+          projectId,
+          projectPath: localProjectPath.trim(),
+          diagramFile: diagramFile.trim() || "diagram.json",
+          sketchFile: sketchFile.trim() || "sketch.ino",
+          diagramJson: parsedDiagram,
+          sketchCode: sketchPayload,
+          fqbn: fqbn.trim() || "arduino:avr:uno",
+          timeoutMs: Number(timeoutMs) || 20000,
+          compileTimeoutMs: Number(compileTimeoutMs) || 180000,
+          expectText: expectText.trim(),
+          failText: failText.trim()
+        },
+        baseConfig
+      );
+
+      setLastResult(res.data);
+      toast.success("Sync+Compile+Run completed");
+      await refreshEvidence();
+    } catch (err) {
+      const responseData = err?.response?.data || {};
+      const compileSummary = responseData?.compileResult?.summary || "";
+      const runSummary = responseData?.runResult?.summary || "";
+      const stage = responseData?.stage ? `stage=${responseData.stage}` : "";
+      const message =
+        responseData?.error ||
+        compileSummary ||
+        runSummary ||
+        stage ||
+        "Sync+Compile+Run failed";
+      toast.error(message);
+      const hasPayload = responseData && Object.keys(responseData).length > 0;
+      setLastResult(
+        hasPayload
+          ? responseData
+          : {
+              error: message,
+              stage: "network-or-empty-response",
+              axiosMessage: err?.message || "",
+              axiosCode: err?.code || "",
+              requestUrl: "http://localhost:5000/api/wokwi/local/sync-run"
+            }
+      );
+    } finally {
+      setRunningAction("");
+    }
+  };
 
   const saveLocalPath = async () => {
     if (!projectId) return;
@@ -440,6 +602,22 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
               />
             </div>
             <div>
+              <label className="block text-xs font-semibold">Sketch file</label>
+              <input
+                value={sketchFile}
+                onChange={(e) => setSketchFile(e.target.value)}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold">Board FQBN</label>
+              <input
+                value={fqbn}
+                onChange={(e) => setFqbn(e.target.value)}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
+              />
+            </div>
+            <div>
               <label className="block text-xs font-semibold">Scenario path</label>
               <input
                 value={scenarioPath}
@@ -453,6 +631,15 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
                 type="number"
                 value={timeoutMs}
                 onChange={(e) => setTimeoutMs(Number(e.target.value || 0))}
+                className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold">Compile timeout (ms)</label>
+              <input
+                type="number"
+                value={compileTimeoutMs}
+                onChange={(e) => setCompileTimeoutMs(Number(e.target.value || 0))}
                 className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
               />
             </div>
@@ -499,6 +686,52 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
             <button onClick={captureSerial} disabled={Boolean(runningAction)} className={`rounded-lg px-3 py-2 text-xs font-semibold ${isDark ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]" : "bg-black text-white hover:bg-[#222]"}`}>
               Serial Capture
             </button>
+          </div>
+
+          <div className="mt-5 rounded-lg border p-3">
+            <p className="text-xs font-semibold">Local File Sync</p>
+            <p className={`mt-1 text-[11px] ${isDark ? "text-[#9a9a9a]" : "text-[#666]"}`}>
+              Paste diagram.json + sketch.ino, then one click writes files locally, compiles, and runs Wokwi.
+            </p>
+
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                onClick={loadLocalFiles}
+                disabled={Boolean(runningAction)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
+              >
+                Load From Local Path
+              </button>
+              <button
+                onClick={syncCompileRun}
+                disabled={Boolean(runningAction)}
+                className={`rounded-lg px-3 py-2 text-xs font-semibold ${isDark ? "bg-green-700 hover:bg-green-600" : "bg-green-600 text-white hover:bg-green-700"}`}
+              >
+                Sync + Compile + Run
+              </button>
+            </div>
+
+            <label className="mt-3 block text-xs font-semibold">diagram.json</label>
+            <textarea
+              value={diagramText}
+              onChange={(e) => {
+                setDiagramText(e.target.value);
+                setDiagramDirty(true);
+              }}
+              rows={8}
+              className={`mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ddd]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}
+            />
+
+            <label className="mt-3 block text-xs font-semibold">sketch.ino</label>
+            <textarea
+              value={sketchText}
+              onChange={(e) => {
+                setSketchText(e.target.value);
+                setSketchDirty(true);
+              }}
+              rows={8}
+              className={`mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ddd]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}
+            />
           </div>
 
           <p className={`mt-3 text-xs ${isDark ? "text-[#999]" : "text-[#666]"}`}>
