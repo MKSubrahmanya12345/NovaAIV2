@@ -1,5 +1,6 @@
 import Groq from "groq-sdk";
 import { buildWokwiEvidenceText } from "./wokwi-runner.service.js";
+import { formatWokwiComponentCatalogForPrompt, findUnsupportedPartTypesInText } from "../lib/wokwi-components.js";
 
 const groq = new Groq({
   apiKey: process.env.GROQ_API_KEY
@@ -185,6 +186,53 @@ const normalizeIdeationOutput = (raw, userInput, fallbackQuestion = "Please prov
   };
 };
 
+const enforceCatalogForIdeation = (output) => {
+  const combinedText = [
+    output.summary,
+    ...(output.requirements || []),
+    output.assistantReply,
+    output.question
+  ].join("\n");
+
+  const unsupportedPartTypes = findUnsupportedPartTypesInText(combinedText);
+  if (unsupportedPartTypes.length === 0) {
+    return output;
+  }
+
+  const unsupportedLabel = unsupportedPartTypes.join(", ");
+
+  return {
+    ...output,
+    unknowns: cleanArray([
+      ...(output.unknowns || []),
+      `Unsupported Wokwi part types referenced: ${unsupportedLabel}`
+    ]),
+    question: output.question || "Should I replace the unsupported parts with closest supported Wokwi alternatives?",
+    assistantReply: `I found unsupported Wokwi part types in the plan (${unsupportedLabel}). I will only use supported Wokwi components, or a custom chip with chip-<name> once you define it in wokwi.toml with matching .chip.json/.wasm files.`
+  };
+};
+
+const enforceCatalogForComponents = (output) => {
+  const combinedText = [
+    output.architecture,
+    ...(output.components || []),
+    ...(output.apiEndpoints || []),
+    output.reply
+  ].join("\n");
+
+  const unsupportedPartTypes = findUnsupportedPartTypesInText(combinedText);
+  if (unsupportedPartTypes.length === 0) {
+    return output;
+  }
+
+  const unsupportedLabel = unsupportedPartTypes.join(", ");
+
+  return {
+    ...output,
+    reply: `${output.reply}\n\nConstraint check: unsupported Wokwi part types detected (${unsupportedLabel}). Please switch these to supported parts, or define custom chips as chip-<name> with wokwi.toml + .chip.json/.wasm.`
+  };
+};
+
 /*
 ========================
 IDEATION (your original upgraded)
@@ -237,8 +285,14 @@ RULES:
 - Keep summary updated and precise
 - Do not repeat the same question if it was already asked recently; either choose a different critical unknown or proceed with conservative defaults.
 - Never use generic reply text such as "Ideation state updated."
+- You must only use components from the approved Wokwi component catalog listed below.
+- If user requests a component outside this catalog, mark it as unavailable in unknowns and suggest the closest in-catalog alternative.
+- Custom parts are allowed only as chip-<name> (Wokwi Chips API) and must be treated as pending until user confirms custom chip files exist.
 - NEVER output anything outside JSON
 - DO NOT include <think> tags
+
+APPROVED WOKWI COMPONENT CATALOG:
+${formatWokwiComponentCatalogForPrompt()}
 
 OUTPUT STRICT JSON:
 
@@ -267,7 +321,8 @@ ${userInput}
   const parsed = safeParse(text);
 
   const normalized = normalizeIdeationOutput(parsed, userInput);
-  return applyIdeationGuards(project, userInput, normalized);
+  const guarded = applyIdeationGuards(project, userInput, normalized);
+  return enforceCatalogForIdeation(guarded);
 
   
 };
@@ -297,6 +352,9 @@ RULES:
 - No vague components
 - Output must be buildable
 - Include concise implementation guidance in reply.
+- Use only approved Wokwi components from the catalog below.
+- If an unavailable part is needed, suggest nearest supported alternative.
+- If user explicitly requests custom component behavior, describe it as chip-<name> and mention it requires wokwi.toml + .chip.json/.wasm setup.
 - In reply, include two labeled sections:
   1) "Connections" (what connects to what)
   2) "Expected output" (what user sees/gets after connection)
@@ -319,6 +377,9 @@ ${JSON.stringify(project.ideaState)}
 CURRENT COMPONENT STATE:
 ${JSON.stringify(project.componentsState)}
 
+APPROVED WOKWI COMPONENT CATALOG:
+${formatWokwiComponentCatalogForPrompt()}
+
 WOKWI RUNNER EVIDENCE:
 ${runnerEvidence}
 
@@ -333,10 +394,12 @@ ${userInput}
 
   try {
     const parsed = safeParse(text);
-    return normalizeComponentsOutput(parsed, stripThinking(text));
+    const normalized = normalizeComponentsOutput(parsed, stripThinking(text));
+    return enforceCatalogForComponents(normalized);
   } catch {
     // Keep chat flow alive when model returns plain text instead of strict JSON.
-    return normalizeComponentsOutput({}, stripThinking(text));
+    const normalized = normalizeComponentsOutput({}, stripThinking(text));
+    return enforceCatalogForComponents(normalized);
   }
 };
 
@@ -468,6 +531,157 @@ ${userInput}
     // Keep chat flow alive even if the model emits non-JSON text.
     const fallback = normalizeDesignOutput({}, stripThinking(text));
     fallback.reply = enforceLiveParts(fallback.reply);
+    return fallback;
+  }
+};
+
+const sanitizeChipName = (value = "") => {
+  const cleaned = String(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+
+  if (!cleaned) return "custom-chip";
+  return cleaned;
+};
+
+const buildFallbackCustomChipTemplate = ({ chipName, purpose }) => {
+  const normalizedName = sanitizeChipName(chipName || "custom-chip");
+  const prettyName = normalizedName.replace(/-/g, " ");
+
+  const chipJson = {
+    name: normalizedName,
+    author: "HardCode AI",
+    pins: ["VCC", "GND", "IN", "OUT"],
+    controls: []
+  };
+
+  const chipC = `// Wokwi Custom Chip - generated by HardCode\n// Purpose: ${purpose || "Custom simulation component"}\n\n#include \"wokwi-api.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct {\n  pin_t pin_in;\n  pin_t pin_out;\n} chip_state_t;\n\nstatic void pin_in_changed(void *user_data, pin_t pin, uint32_t value) {\n  chip_state_t *chip = (chip_state_t *)user_data;\n  pin_write(chip->pin_out, value);\n}\n\nvoid chip_init() {\n  chip_state_t *chip = malloc(sizeof(chip_state_t));\n\n  chip->pin_in = pin_init(\"IN\", INPUT);\n  chip->pin_out = pin_init(\"OUT\", OUTPUT);\n\n  const pin_watch_config_t watch = {\n    .edge = BOTH,\n    .pin = chip->pin_in,\n    .user_data = chip,\n    .callback = pin_in_changed,\n  };\n  pin_watch(&watch);\n\n  printf(\"${normalizedName} initialized\\n\");\n}\n`;
+
+  return {
+    chipName: normalizedName,
+    partType: `chip-${normalizedName}`,
+    files: {
+      chipJsonFileName: `${normalizedName}.chip.json`,
+      chipCFileName: `${normalizedName}.chip.c`,
+      chipJson,
+      chipC
+    },
+    snippets: {
+      diagramPart: {
+        type: `chip-${normalizedName}`,
+        id: `${normalizedName}1`,
+        top: 0,
+        left: 0,
+        attrs: {}
+      },
+      wokwiTomlChipEntry: `[[chip]]\nname = '${normalizedName}'\nbinary = 'chips/${normalizedName}.chip.wasm'`
+    },
+    guidance: [
+      `Generated fallback template for ${prettyName}.`,
+      "Compile the .chip.c source into .chip.wasm with wokwi-cli chip compile.",
+      "Keep .chip.json and .chip.wasm names aligned with the chip name.",
+      "Use the diagram part snippet to place the custom chip in diagram.json."
+    ]
+  };
+};
+
+const normalizeCustomChipTemplateOutput = (raw, fallback) => {
+  const chipName = sanitizeChipName(raw?.chipName || fallback.chipName);
+  const partType = `chip-${chipName}`;
+
+  const chipJson = raw?.files?.chipJson && typeof raw.files.chipJson === "object"
+    ? raw.files.chipJson
+    : fallback.files.chipJson;
+
+  const chipC = typeof raw?.files?.chipC === "string" && raw.files.chipC.trim()
+    ? raw.files.chipC
+    : fallback.files.chipC;
+
+  const diagramPart = raw?.snippets?.diagramPart && typeof raw.snippets.diagramPart === "object"
+    ? {
+        ...raw.snippets.diagramPart,
+        type: partType,
+        id: String(raw.snippets.diagramPart.id || `${chipName}1`)
+      }
+    : {
+        ...fallback.snippets.diagramPart,
+        type: partType,
+        id: `${chipName}1`
+      };
+
+  const guidance = cleanArray(raw?.guidance);
+
+  return {
+    chipName,
+    partType,
+    files: {
+      chipJsonFileName: `${chipName}.chip.json`,
+      chipCFileName: `${chipName}.chip.c`,
+      chipJson,
+      chipC
+    },
+    snippets: {
+      diagramPart,
+      wokwiTomlChipEntry: `[[chip]]\nname = '${chipName}'\nbinary = 'chips/${chipName}.chip.wasm'`
+    },
+    guidance: guidance.length > 0 ? guidance : fallback.guidance
+  };
+};
+
+export const generateCustomChipTemplate = async ({ project, chipName = "", purpose = "", userPrompt = "" }) => {
+  const fallback = buildFallbackCustomChipTemplate({ chipName, purpose: purpose || userPrompt });
+
+  const prompt = `
+You are an embedded simulation assistant.
+
+GOAL:
+Generate a strict Wokwi custom chip template using a fixed structure.
+
+RULES:
+- Return ONLY JSON.
+- chipName must be lowercase kebab-case, no spaces.
+- partType must be chip-<chipName>.
+- files.chipJson must follow Wokwi chip definition shape: name, author, pins, controls.
+- files.chipC must compile as a basic Wokwi chip C source and include chip_init().
+- snippets.diagramPart.type must be chip-<chipName>.
+- snippets.wokwiTomlChipEntry must include [[chip]], name, and binary path.
+- Keep template practical and minimal.
+
+OUTPUT JSON SHAPE:
+{
+  "chipName": "",
+  "partType": "",
+  "files": {
+    "chipJson": {},
+    "chipC": ""
+  },
+  "snippets": {
+    "diagramPart": {},
+    "wokwiTomlChipEntry": ""
+  },
+  "guidance": []
+}
+
+PROJECT DESCRIPTION:
+${project?.description || ""}
+
+CHIP NAME REQUEST:
+${chipName || "custom-chip"}
+
+PURPOSE:
+${purpose || ""}
+
+USER PROMPT:
+${userPrompt || ""}
+`;
+
+  try {
+    const text = await callAI(prompt);
+    const parsed = safeParse(text);
+    return normalizeCustomChipTemplateOutput(parsed, fallback);
+  } catch {
     return fallback;
   }
 };

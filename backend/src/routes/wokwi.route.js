@@ -9,6 +9,7 @@ import {
   getLocalWokwiFiles,
   syncCompileRunWokwi,
   getLocalWokwiScreenshot,
+  generateCustomChipBlueprint,
   startInteractiveMcpSession,
   callInteractiveMcpTool,
   stopInteractiveMcpSession,
@@ -24,6 +25,7 @@ router.post("/wokwi/serial/capture", protectRoute, captureSerialWokwi);
 router.post("/wokwi/local/files", protectRoute, getLocalWokwiFiles);
 router.post("/wokwi/local/sync-run", protectRoute, syncCompileRunWokwi);
 router.get("/wokwi/local/screenshot/:projectId", protectRoute, getLocalWokwiScreenshot);
+router.post("/wokwi/custom-chip/generate", protectRoute, generateCustomChipBlueprint);
 router.get("/wokwi/evidence/:projectId", protectRoute, getWokwiEvidence);
 
 router.post("/wokwi/mcp/session/start", protectRoute, startInteractiveMcpSession);

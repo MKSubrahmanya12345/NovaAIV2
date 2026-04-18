@@ -15,7 +15,14 @@ export default function AuthPage() {
     fullName: ""
   });
 
-  const handleSubmit = () => {
+  const canSubmit = isLogin
+    ? Boolean(data.email.trim() && data.password)
+    : Boolean(data.fullName.trim() && data.email.trim() && data.password);
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    if (!canSubmit) return;
+
     if (isLogin) login(data);
     else signup(data);
   };
@@ -89,74 +96,80 @@ export default function AuthPage() {
           </button>
         </div>
 
-        {/* Inputs */}
-        <div className="mt-5 space-y-3">
-          {!isLogin && (
+        <form onSubmit={handleSubmit}>
+          {/* Inputs */}
+          <div className="mt-5 space-y-3">
+            {!isLogin && (
+              <div className="space-y-1">
+                <label className={`ml-1 text-xs ${
+                  isDark ? "text-[#888]" : "text-[#666]"
+                }`}>
+                  Full name
+                </label>
+                <input
+                  placeholder="Your name"
+                  value={data.fullName}
+                  className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
+                    isDark
+                      ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
+                      : "bg-white border-black/10 focus:bg-[#fafafa]"
+                  }`}
+                  onChange={e => setData({ ...data, fullName: e.target.value })}
+                />
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className={`ml-1 text-xs ${
                 isDark ? "text-[#888]" : "text-[#666]"
               }`}>
-                Full name
+                Email
               </label>
               <input
-                placeholder="Your name"
+                placeholder="you@example.com"
+                value={data.email}
                 className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
                   isDark
                     ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
                     : "bg-white border-black/10 focus:bg-[#fafafa]"
                 }`}
-                onChange={e => setData({ ...data, fullName: e.target.value })}
+                onChange={e => setData({ ...data, email: e.target.value })}
               />
             </div>
-          )}
 
-          <div className="space-y-1">
-            <label className={`ml-1 text-xs ${
-              isDark ? "text-[#888]" : "text-[#666]"
-            }`}>
-              Email
-            </label>
-            <input
-              placeholder="you@example.com"
-              className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
-                isDark
-                  ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
-                  : "bg-white border-black/10 focus:bg-[#fafafa]"
-              }`}
-              onChange={e => setData({ ...data, email: e.target.value })}
-            />
+            <div className="space-y-1">
+              <label className={`ml-1 text-xs ${
+                isDark ? "text-[#888]" : "text-[#666]"
+              }`}>
+                Password
+              </label>
+              <input
+                placeholder="••••••••"
+                type="password"
+                value={data.password}
+                className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
+                  isDark
+                    ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
+                    : "bg-white border-black/10 focus:bg-[#fafafa]"
+                }`}
+                onChange={e => setData({ ...data, password: e.target.value })}
+              />
+            </div>
           </div>
 
-          <div className="space-y-1">
-            <label className={`ml-1 text-xs ${
-              isDark ? "text-[#888]" : "text-[#666]"
-            }`}>
-              Password
-            </label>
-            <input
-              placeholder="••••••••"
-              type="password"
-              className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
-                isDark
-                  ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
-                  : "bg-white border-black/10 focus:bg-[#fafafa]"
-              }`}
-              onChange={e => setData({ ...data, password: e.target.value })}
-            />
-          </div>
-        </div>
-
-        {/* CTA */}
-        <button
-          onClick={handleSubmit}
-          className={`mt-6 w-full rounded-lg py-2.5 text-sm font-semibold transition ${
-            isDark
-              ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]"
-              : "bg-black text-white hover:bg-[#222]"
-          }`}
-        >
-          {isLogin ? "Login" : "Create account"}
-        </button>
+          {/* CTA */}
+          <button
+            type="submit"
+            disabled={!canSubmit}
+            className={`mt-6 w-full rounded-lg py-2.5 text-sm font-semibold transition ${
+              isDark
+                ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]"
+                : "bg-black text-white hover:bg-[#222]"
+            } ${!canSubmit ? "opacity-60 cursor-not-allowed" : ""}`}
+          >
+            {isLogin ? "Login" : "Create account"}
+          </button>
+        </form>
 
         <p className={`mt-4 text-center text-xs ${
           isDark ? "text-[#888]" : "text-[#666]"

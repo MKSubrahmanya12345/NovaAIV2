@@ -77,6 +77,8 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
   const [sketchText, setSketchText] = useState("void setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  delay(500);\n}\n");
   const [diagramDirty, setDiagramDirty] = useState(false);
   const [sketchDirty, setSketchDirty] = useState(false);
+  const [customChipName, setCustomChipName] = useState("battery");
+  const [customChipPurpose, setCustomChipPurpose] = useState("9V battery source with stable output rails");
 
   const [evidence, setEvidence] = useState(null);
   const [lastResult, setLastResult] = useState(null);
@@ -553,6 +555,33 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
     }
   };
 
+  const generateCustomChip = async () => {
+    if (!projectId) return;
+
+    try {
+      setRunningAction("Generate custom chip");
+      const res = await axios.post(
+        "http://localhost:5000/api/wokwi/custom-chip/generate",
+        {
+          projectId,
+          chipName: customChipName,
+          purpose: customChipPurpose,
+          userPrompt: customChipPurpose
+        },
+        baseConfig
+      );
+
+      setLastResult(res.data);
+      toast.success("Custom chip template generated");
+    } catch (err) {
+      const message = err?.response?.data?.error || "Failed to generate custom chip template";
+      toast.error(message);
+      setLastResult(err?.response?.data || { error: message });
+    } finally {
+      setRunningAction("");
+    }
+  };
+
   return (
     <div className={`h-full overflow-y-auto px-5 py-5 ${isDark ? "bg-[#222]" : "bg-[#fafafa]"}`}>
       <div className="grid gap-4 lg:grid-cols-2">
@@ -732,6 +761,42 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
               rows={8}
               className={`mt-1 w-full rounded-lg border px-3 py-2 font-mono text-xs ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ddd]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}
             />
+          </div>
+
+          <div className="mt-5 rounded-lg border p-3">
+            <p className="text-xs font-semibold">AI Custom Component Designer</p>
+            <p className={`mt-1 text-[11px] ${isDark ? "text-[#9a9a9a]" : "text-[#666]"}`}>
+              Generates strict chip blueprint output: .chip.json, .chip.c, diagram part snippet, and wokwi.toml chip entry.
+            </p>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-semibold">Chip codename</label>
+                <input
+                  value={customChipName}
+                  onChange={(e) => setCustomChipName(e.target.value)}
+                  placeholder="battery"
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold">Purpose</label>
+                <input
+                  value={customChipPurpose}
+                  onChange={(e) => setCustomChipPurpose(e.target.value)}
+                  placeholder="9V battery source"
+                  className={`mt-1 w-full rounded-lg border px-3 py-2 text-sm ${isDark ? "border-white/10 bg-[#1f1f1f]" : "border-black/10 bg-[#f7f7f7]"}`}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={generateCustomChip}
+              disabled={Boolean(runningAction) || !customChipName.trim()}
+              className={`mt-3 rounded-lg px-3 py-2 text-xs font-semibold ${isDark ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]" : "bg-black text-white hover:bg-[#222]"} ${(!customChipName.trim() || Boolean(runningAction)) ? "opacity-60" : ""}`}
+            >
+              Generate Custom Chip Blueprint
+            </button>
           </div>
 
           <p className={`mt-3 text-xs ${isDark ? "text-[#999]" : "text-[#666]"}`}>

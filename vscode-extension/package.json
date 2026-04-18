@@ -1,0 +1,106 @@
+{
+  "name": "hardcode",
+  "displayName": "HardCode",
+  "description": "VS Code extension for HardCode",
+  "version": "0.0.4",
+  "engines": {
+    "vscode": "^1.116.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:hardcode.chatsView",
+    "onCommand:hardcode-vscode-extension.openChat",
+    "onCommand:hardcode-vscode-extension.createWokwiProject",
+    "onCommand:hardcode.openChat",
+    "onCommand:hardcode.createWokwiProject",
+    "onCommand:hardcode.openSimulatorWorkbench",
+    "onCommand:hardcode.selectSimulationPath"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "views": {
+      "explorer": [
+        {
+          "type": "webview",
+          "id": "hardcode.chatsView",
+          "name": "HARDCODE CHATS"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "hardcode-vscode-extension.openChat",
+        "title": "HardCode: Start Chat"
+      },
+      {
+        "command": "hardcode.openChat",
+        "title": "HardCode: Start Chat"
+      },
+      {
+        "command": "hardcode-vscode-extension.createWokwiProject",
+        "title": "HardCode: Create Wokwi Project"
+      },
+      {
+        "command": "hardcode.createWokwiProject",
+        "title": "HardCode: Create Wokwi Project"
+      },
+      {
+        "command": "hardcode.openSimulatorWorkbench",
+        "title": "HardCode: Open Simulator Workbench"
+      },
+      {
+        "command": "hardcode.selectSimulationPath",
+        "title": "HardCode: Select Simulation Path"
+      }
+    ],
+    "configuration": {
+      "title": "HardCode",
+      "properties": {
+        "hardcode.wokwiProjectsPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional absolute path where Wokwi projects are stored. Leave empty to use workspace .wokwi-projects or Documents/WokwiProjects."
+        },
+        "hardcode.webAppUrl": {
+          "type": "string",
+          "default": "http://localhost:5173",
+          "markdownDescription": "HardCode frontend URL embedded in the sidebar chat iframe."
+        },
+        "hardcode.backendUrl": {
+          "type": "string",
+          "default": "http://localhost:5000",
+          "markdownDescription": "HardCode backend base URL shown in sidebar for quick verification."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "@types/vscode": "^1.116.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "@vscode/vsce": "^3.9.0",
+    "esbuild": "^0.27.3",
+    "eslint": "^9.39.3",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.56.1"
+  }
+}

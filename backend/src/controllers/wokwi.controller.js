@@ -20,6 +20,7 @@ import {
   compileWokwiSketch,
   readWokwiProjectFiles
 } from "../services/wokwi-local.service.js";
+import { generateCustomChipTemplate } from "../services/ai.services.js";
 
 const ensureProjectAccess = async (projectId, userId) => {
   if (!mongoose.Types.ObjectId.isValid(projectId)) {
@@ -447,5 +448,30 @@ export const getLocalWokwiScreenshot = async (req, res) => {
     res.sendFile(screenshotPath);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to load local screenshot" });
+  }
+};
+
+export const generateCustomChipBlueprint = async (req, res) => {
+  try {
+    const { projectId, chipName = "", purpose = "", userPrompt = "" } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const template = await generateCustomChipTemplate({
+      project: access.project,
+      chipName,
+      purpose,
+      userPrompt
+    });
+
+    res.json({
+      projectId,
+      template
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message || "Failed to generate custom chip blueprint" });
   }
 };

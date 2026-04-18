@@ -1,5 +1,6 @@
 import express from "express";
 import {
+  createProject,
   getProjectById,
   getUserProjects,
   getIdeationHistory,
@@ -12,6 +13,7 @@ import { protectRoute } from "../middleware/auth.middleware.js";
 const router = express.Router();
 
 // project management routes
+router.post("/", protectRoute, createProject);
 router.get("/projects", protectRoute, getUserProjects);
 router.get("/project/:id", protectRoute, getProjectById);
 router.get("/project/:id/history/ideation", protectRoute, getIdeationHistory);

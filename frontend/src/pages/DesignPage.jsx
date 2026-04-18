@@ -54,6 +54,7 @@ export default function DesignPage() {
     isVoiceSupported,
     isRecognitionSupported,
     status: voiceStatus,
+    diagnostics: voiceDiagnostics,
     speakText,
     startListening,
     stopListening,
@@ -72,7 +73,7 @@ export default function DesignPage() {
       }
     },
     onInterimTranscript: (text) => {
-      if (!handsFreeMode || !text) return;
+      if (!text) return;
       setInput(text);
     },
     onError: (error) => {
@@ -715,6 +716,7 @@ export default function DesignPage() {
                 speechRate={speechRate}
                 setSpeechRate={setSpeechRate}
                 voiceStatus={voiceStatus}
+                voiceDiagnostics={voiceDiagnostics}
                 voiceSupported={isVoiceSupported}
                 recognitionSupported={isRecognitionSupported}
                 onToggleVoice={handleToggleVoice}

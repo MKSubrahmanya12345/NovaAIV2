@@ -16,6 +16,7 @@ export default function DesignChat({
   speechRate,
   setSpeechRate,
   voiceStatus,
+  voiceDiagnostics,
   voiceSupported,
   recognitionSupported,
   onToggleVoice,
@@ -125,6 +126,14 @@ export default function DesignChat({
             {speechRate.toFixed(2)}x
           </span>
         </div>
+
+        <p className={`mt-2 text-[10px] ${isDark ? "text-[#9a9a9a]" : "text-[#666]"}`}>
+          STT {voiceDiagnostics?.sttSuccess || 0}/{voiceDiagnostics?.sttAttempts || 0} |
+          Failures {voiceDiagnostics?.sttFailures || 0} |
+          Last chunk {Math.round((voiceDiagnostics?.lastChunkBytes || 0) / 1024)}KB |
+          MIME {voiceDiagnostics?.recorderMimeType || "-"}
+          {voiceDiagnostics?.lastError ? ` | Last error: ${voiceDiagnostics.lastError}` : ""}
+        </p>
       </div>
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">

@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useThemeStore } from "../store/useThemeStore";
+import { useAuthStore } from "../store/useAuthStore";
 import axios from "axios";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
@@ -8,11 +9,15 @@ import toast from "react-hot-toast";
 export default function HomePage() {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useThemeStore();
+  const logout = useAuthStore((state) => state.logout);
   const isDark = theme === "dark";
 
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [isProjectFormOpen, setIsProjectFormOpen] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("My new project");
 
   // 🔥 fetch user projects
   useEffect(() => {
@@ -37,10 +42,7 @@ export default function HomePage() {
   const handleCreateProject = async () => {
     if (isCreating) return;
 
-    const descriptionInput = window.prompt("Project name", "My new project");
-    if (!descriptionInput) return;
-
-    const description = descriptionInput.trim();
+    const description = newProjectName.trim();
     if (!description) {
       toast.error("Project name is required");
       return;
@@ -54,6 +56,8 @@ export default function HomePage() {
         { withCredentials: true }
       );
 
+      setIsProjectFormOpen(false);
+      setNewProjectName("My new project");
       navigate(`/project/${res.data.projectId}`);
     } catch (err) {
       console.error("Create Project Error:", err);
@@ -109,6 +113,21 @@ export default function HomePage() {
     }
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+      await logout();
+
+      if (!useAuthStore.getState().authUser) {
+        navigate("/auth");
+      }
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
       
@@ -143,6 +162,18 @@ export default function HomePage() {
             >
               {isDark ? "Light" : "Dark"}
             </button>
+
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold border transition ${
+                isDark
+                  ? "border-white/10 hover:bg-white/10"
+                  : "border-black/10 hover:bg-black/5"
+              } ${isLoggingOut ? "opacity-60 cursor-not-allowed" : ""}`}
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
+            </button>
           </div>
         </div>
       </div>
@@ -176,6 +207,58 @@ export default function HomePage() {
             Select a project to continue.
           </p>
         </motion.header>
+
+        <div className={`mb-8 rounded-2xl border p-5 ${isDark ? "border-white/10 bg-[#2a2a2a]" : "border-black/10 bg-white"}`}>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Create project</p>
+              <p className={`mt-1 text-sm ${isDark ? "text-[#a3a3a3]" : "text-[#555]"}`}>
+                Add a project without browser prompts.
+              </p>
+            </div>
+            <button
+              onClick={() => setIsProjectFormOpen((value) => !value)}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${
+                isDark
+                  ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]"
+                  : "bg-black text-white hover:bg-[#222]"
+              }`}
+            >
+              {isProjectFormOpen ? "Close" : "New Project"}
+            </button>
+          </div>
+
+          {isProjectFormOpen && (
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="flex-1 space-y-1">
+                <label className={`ml-1 text-xs ${isDark ? "text-[#888]" : "text-[#666]"}`}>
+                  Project name
+                </label>
+                <input
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                  placeholder="My new project"
+                  className={`w-full rounded-lg px-3 py-2.5 text-sm outline-none border ${
+                    isDark
+                      ? "bg-[#1f1f1f] border-white/10 focus:bg-[#262626]"
+                      : "bg-white border-black/10 focus:bg-[#fafafa]"
+                  }`}
+                />
+              </div>
+              <button
+                onClick={handleCreateProject}
+                disabled={isCreating}
+                className={`rounded-lg px-5 py-2.5 text-xs font-semibold transition ${
+                  isDark
+                    ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]"
+                    : "bg-black text-white hover:bg-[#222]"
+                } ${isCreating ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                {isCreating ? "Creating..." : "Create project"}
+              </button>
+            </div>
+          )}
+        </div>
 
         <div className="mb-8 grid gap-4 sm:grid-cols-3">
           {[
@@ -274,17 +357,6 @@ export default function HomePage() {
           }`}>
             <p className="text-base font-semibold">No projects yet</p>
             <p className="mt-2">Use the New Project button to create your first workspace.</p>
-            <button
-              onClick={handleCreateProject}
-              disabled={isCreating}
-              className={`mt-5 rounded-full px-5 py-2.5 text-xs font-semibold transition ${
-                isDark
-                  ? "bg-white text-[#111] hover:bg-[#e8e8e8]"
-                  : "bg-black text-white hover:bg-[#222]"
-              } ${isCreating ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              {isCreating ? "Creating..." : "Create project"}
-            </button>
           </div>
         )}
       </div>
