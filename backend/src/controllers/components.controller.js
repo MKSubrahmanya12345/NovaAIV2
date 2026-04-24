@@ -1,4 +1,5 @@
 import Project from "../models/project.model.js";
+// Components chat + Wokwi plan generation use Groq model: GROQ_MODEL_COMPONENTS or default meta-llama/llama-4-scout-17b-16e-instruct (see config/groq-models.js).
 import { processComponents } from "../services/ai.services.js";
 import { generateArtifactsFromRegistry } from "../services/registry-codegen.service.js";
 

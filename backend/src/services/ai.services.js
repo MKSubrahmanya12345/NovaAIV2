@@ -1,4 +1,5 @@
 import Groq from "groq-sdk";
+import { getGroqModelComponents, getGroqModelIdeation } from "../config/groq-models.js";
 import { buildWokwiEvidenceText } from "./wokwi-runner.service.js";
 import { formatWokwiComponentCatalogForPrompt, findUnsupportedPartTypesInText } from "../lib/wokwi-components.js";
 import { getAIContext, getRegistry } from "./registry.service.js";
@@ -663,11 +664,14 @@ const recoverGeneratedAssetsFromText = (text = "") => {
 
 /*
 COMMON CALL
+- pipeline "ideation": GROQ_MODEL_IDEATION (default qwen/qwen3-32b)
+- pipeline "components": GROQ_MODEL_COMPONENTS (default meta-llama/llama-4-scout-17b-16e-instruct)
 */
-const callAI = async (prompt) => {
+const callAI = async (prompt, { pipeline = "ideation" } = {}) => {
   const groq = getGroqClient();
+  const model = pipeline === "components" ? getGroqModelComponents() : getGroqModelIdeation();
   const baseArgs = {
-    model: process.env.GROQ_MODEL || "gpt-4o",
+    model,
     messages: [
       { role: "system", content: "Return ONLY valid JSON. No markdown. No prose. No <think>." },
       { role: "user", content: prompt }
@@ -831,7 +835,7 @@ ${userPrompt || ""}
 `;
 
   try {
-    const text = await callAI(prompt);
+    const text = await callAI(prompt, { pipeline: "components" });
     const parsed = safeParse(text);
     return normalizeCustomChipTemplateOutput(parsed, fallback);
   } catch {
@@ -1792,7 +1796,7 @@ ${userInput}
   fetch('http://127.0.0.1:7453/ingest/b8da6778-f3ca-4c12-8d65-59ddc4130029',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'6aa033'},body:JSON.stringify({sessionId:'6aa033',runId:'pre-fix',hypothesisId:'H2',location:'backend/src/services/ai.services.js:processInput:prompt',message:'Ideation prompt summary',data:{promptHasRegistry:prompt.includes('COMPONENT REGISTRY (CONTROLLERS ONLY)'),promptBoardsSample:allowedBoardKeys.slice(0,10),messagesChars:messagesText.length},timestamp:Date.now()})}).catch(()=>{});
   // #endregion agent log
 
-  const text = await callAI(prompt);
+  const text = await callAI(prompt, { pipeline: "ideation" });
   let parsed;
   try {
     parsed = safeParse(text);
@@ -1936,7 +1940,7 @@ USER INPUT:
 ${userInput}
 `;
 
-  const text = await callAI(prompt);
+  const text = await callAI(prompt, { pipeline: "components" });
 
   try {
     const parsed = safeParse(text);
@@ -2020,7 +2024,7 @@ USER INPUT:
 ${userInput}
 `;
 
-  const text = await callAI(prompt);
+  const text = await callAI(prompt, { pipeline: "components" });
   const livePartTypes = (wokwiContext?.partTypes || []).map((item) => String(item).toLowerCase());
 
   const hasPartType = (pattern) => livePartTypes.some((part) => pattern.test(part));
@@ -2181,7 +2185,7 @@ ${userPrompt || "Generate best-fit sketch and diagram from the existing project 
 `;
 
   try {
-    const text = await callAI(prompt);
+    const text = await callAI(prompt, { pipeline: "components" });
 
     let parsedPayload;
     try {

@@ -2,7 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { getRegistry } from "./registry.service.js";
-import { validatePlan, generateArtifactsFromRegistry } from "./registry-codegen.service.js";
+import {
+  validatePlan,
+  generateArtifactsFromRegistry,
+  generateParts,
+  buildServoSketchFromPlan
+} from "./registry-codegen.service.js";
 
 test("validatePlan: rejects invalid pin for a variant", () => {
   const registry = getRegistry();
@@ -112,6 +117,129 @@ test("a4988 registry: pins match expected Wokwi contract", () => {
     "2B",
     "VMOT"
   ]);
+});
+
+test("servo registry: wokwi-servo attrs are horn + hornColor only (no angle)", () => {
+  const registry = getRegistry();
+  const servo = registry.SERVO;
+
+  assert.ok(servo, "SERVO missing from registry");
+  assert.equal(servo.wokwiType, "wokwi-servo");
+  const keys = Object.keys(servo.attrs || {}).sort();
+  assert.deepEqual(keys, ["horn", "hornColor"]);
+  assert.equal(servo.attrs.horn.default, "single");
+  assert.equal(servo.attrs.hornColor.default, "#ccc");
+});
+
+test("generateParts: servo diagram attrs omit angle; keep horn + hornColor only", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      {
+        type: "SERVO",
+        id: "s1",
+        top: 10,
+        left: 20,
+        attrs: { angle: 90, horn: "double", hornColor: "#aabbcc", extra: "drop-me" }
+      }
+    ]
+  };
+
+  const parts = generateParts(registry, plan);
+  const servoPart = parts.find((p) => p.id === "s1");
+  assert.ok(servoPart);
+  assert.deepEqual(Object.keys(servoPart.attrs).sort(), ["horn", "hornColor"]);
+  assert.equal(servoPart.attrs.horn, "double");
+  assert.equal(servoPart.attrs.hornColor, "#aabbcc");
+  assert.ok(!Object.prototype.hasOwnProperty.call(servoPart.attrs, "angle"));
+});
+
+test("generateParts: invalid servo horn falls back to single", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "SERVO", id: "s2", attrs: { horn: "nope" } }]
+  };
+  const servoPart = generateParts(registry, plan).find((p) => p.id === "s2");
+  assert.equal(servoPart.attrs.horn, "single");
+});
+
+test("buildServoSketchFromPlan: second+minute ids get clock-style map + 1 Hz (no fast sweep)", () => {
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "SERVO", id: "servo_seconds", top: 0, left: 0, attrs: {} },
+      { type: "SERVO", id: "servo_minutes", top: 0, left: 0, attrs: {} }
+    ],
+    connections: [
+      { from: { type: "SERVO", id: "servo_seconds", pin: "PWM" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "9" }, color: "green", route: [] },
+      { from: { type: "SERVO", id: "servo_minutes", pin: "PWM" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "10" }, color: "green", route: [] },
+      { from: { type: "SERVO", id: "servo_seconds", pin: "GND" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "SERVO", id: "servo_minutes", pin: "GND" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "SERVO", id: "servo_seconds", pin: "V+" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "SERVO", id: "servo_minutes", pin: "V+" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5V.1" }, color: "red", route: [] }
+    ],
+    notes: []
+  };
+
+  const wireComments = "// - servo_seconds:PWM -> board:9\n// - servo_minutes:PWM -> board:10";
+  const sketch = buildServoSketchFromPlan(plan, wireComments);
+
+  assert.ok(sketch);
+  assert.ok(sketch.includes("#include <Servo.h>"));
+  assert.ok(sketch.includes("Servo servoMinutes"));
+  assert.ok(sketch.includes("Servo servoSeconds"));
+  assert.ok(sketch.includes("servoMinutes.attach(10)"));
+  assert.ok(sketch.includes("servoSeconds.attach(9)"));
+  assert.ok(sketch.includes("map(seconds, 0, 59, 0, 180)"));
+  assert.ok(sketch.includes("map(minutes, 0, 59, 0, 180)"));
+  assert.ok(sketch.includes("delay(1000)"));
+  assert.equal(sketch.includes("delay(25)"), false);
+  assert.ok(sketch.includes("// Wiring plan:"));
+  assert.ok(sketch.includes("servo_seconds:PWM -> board:9"));
+});
+
+test("buildServoSketchFromPlan: two servos without clock ids use slow staggered demo", () => {
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "SERVO", id: "pan", top: 0, left: 0, attrs: {} },
+      { type: "SERVO", id: "tilt", top: 0, left: 0, attrs: {} }
+    ],
+    connections: [
+      { from: { type: "SERVO", id: "pan", pin: "PWM" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5" }, color: "green", route: [] },
+      { from: { type: "SERVO", id: "tilt", pin: "PWM" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "6" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const sketch = buildServoSketchFromPlan(plan);
+  assert.ok(sketch.includes("int demoSec = 0"));
+  assert.ok(sketch.includes("delay(1000)"));
+  assert.ok(sketch.includes("Servo servoPan"));
+  assert.ok(sketch.includes("Servo servoTilt"));
+});
+
+test("buildServoSketchFromPlan: returns null when no SERVO components", () => {
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "PUSHBUTTON", id: "b1", top: 0, left: 0, attrs: {} }],
+    connections: [],
+    notes: []
+  };
+  assert.equal(buildServoSketchFromPlan(plan), null);
+});
+
+test("buildServoSketchFromPlan: returns null when PWM not wired to board", () => {
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "SERVO", id: "s1", top: 0, left: 0, attrs: {} }],
+    connections: [
+      { from: { type: "SERVO", id: "s1", pin: "GND" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" }, color: "black", route: [] }
+    ],
+    notes: []
+  };
+  assert.equal(buildServoSketchFromPlan(plan), null);
 });
 
 test("validatePlan: rejects stepper without a4988 driver", () => {

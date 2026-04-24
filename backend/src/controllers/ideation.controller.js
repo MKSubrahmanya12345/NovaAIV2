@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import Project from "../models/project.model.js";
+// Ideation chat uses Groq model: GROQ_MODEL_IDEATION or default qwen/qwen3-32b (see config/groq-models.js → processInput).
 import { buildGenerationProfileFromMeta, normalizeArchitectureState, processInput } from "../services/ai.services.js";
 
 const isIdeaFinalized = (project) => {

@@ -2,6 +2,7 @@ import Groq from "groq-sdk";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getGroqModelComponents } from "../config/groq-models.js";
 import { getRegistry, getAIContext } from "./registry.service.js";
 
 let GROQ_CLIENT = null;
@@ -112,7 +113,7 @@ const safeParseJson = (text = "") => {
 
 const callAI = async (prompt) => {
   const groq = getGroqClient();
-  const model = process.env.GROQ_MODEL || "gpt-4o";
+  const model = getGroqModelComponents();
 
   // Prefer Groq structured outputs when available; otherwise fall back to prompt-only.
   const baseArgs = {
@@ -224,6 +225,31 @@ const minimalSevenSegmentAttrs = (def, comp) => {
   return out;
 };
 
+/** Wokwi wokwi-servo docs: only horn + hornColor; omit angle and other runtime/editor fields. */
+const SERVO_HORN_VALUES = new Set(["single", "double", "cross"]);
+
+const minimalServoAttrs = (def, comp) => {
+  const defaults = defaultAttrsFor(def);
+  const planA = comp?.attrs && typeof comp.attrs === "object" ? comp.attrs : {};
+
+  const rawHorn =
+    planA.horn != null && String(planA.horn).trim() !== ""
+      ? String(planA.horn)
+      : defaults.horn != null
+        ? String(defaults.horn)
+        : "single";
+  const horn = SERVO_HORN_VALUES.has(rawHorn) ? rawHorn : "single";
+
+  const hornColor =
+    planA.hornColor != null && String(planA.hornColor).trim() !== ""
+      ? String(planA.hornColor)
+      : defaults.hornColor != null
+        ? String(defaults.hornColor)
+        : "#ccc";
+
+  return { horn, hornColor };
+};
+
 const generateParts = (registry, plan) => {
   const items = Array.isArray(plan?.components) ? plan.components : [];
   const { cols, gapX, gapY, startX, startY } = computeLayout(items.length + 1);
@@ -256,14 +282,17 @@ const generateParts = (registry, plan) => {
     const col = idx % cols;
     const isPushbutton = comp.type === "PUSHBUTTON" || comp.type === "PUSHBUTTON_6MM";
     const isSevenSeg = def.wokwiType === "wokwi-7segment";
+    const isServo = def.wokwiType === "wokwi-servo";
     const attrs = isPushbutton
       ? minimalPushbuttonAttrs(comp.attrs)
       : isSevenSeg
         ? minimalSevenSegmentAttrs(def, comp)
-        : {
-            ...defaultAttrsFor(def),
-            ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
-          };
+        : isServo
+          ? minimalServoAttrs(def, comp)
+          : {
+              ...defaultAttrsFor(def),
+              ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
+            };
 
     parts.push({
       type: def.wokwiType,
@@ -281,6 +310,8 @@ const generateParts = (registry, plan) => {
     return cleaned;
   });
 };
+
+export { generateParts };
 
 const validatePinExists = (registry, compType, pinName) => {
   const def = registry[compType];
@@ -593,6 +624,230 @@ const generateConnections = (registry, plan) => {
   });
 };
 
+/** Map Wokwi board pin names to a C++ expression valid inside `Servo::attach(...)`. */
+const boardPinToServoAttachArg = (pin) => {
+  const s = String(pin ?? "").trim();
+  if (s === "") return null;
+  const n = Number(s);
+  if (Number.isFinite(n) && String(n) === s) return String(n);
+  if (/^A\d+$/i.test(s)) return s.toUpperCase();
+  return null;
+};
+
+/** `servo_minutes` -> `servoMinutes` (valid C++ identifier; avoids collisions). */
+const servoIdToCppVarName = (id, usedNames) => {
+  const rest = String(id ?? "")
+    .trim()
+    .replace(/^servo_?/i, "");
+  const words = rest.split(/[^a-zA-Z0-9]+/).filter(Boolean);
+  const pascal = words
+    .map((w) => `${w.charAt(0).toUpperCase()}${w.slice(1).toLowerCase()}`)
+    .join("");
+  let base = pascal ? `servo${pascal}` : "servoMotor";
+  if (!/^[A-Za-z_]/.test(base)) base = `servo_${base}`;
+  let name = base;
+  let n = 2;
+  while (usedNames.has(name)) {
+    name = `${base}${n}`;
+    n += 1;
+  }
+  usedNames.add(name);
+  return name;
+};
+
+/** Infer clock hand from component id (e.g. servo_seconds -> seconds). */
+const inferServoClockRole = (id) => {
+  const lower = String(id ?? "").toLowerCase();
+  if (/\bsec(ond)?s?\b/.test(lower) || lower.includes("second")) return "seconds";
+  if (/\bmin(ute)?s?\b/.test(lower) || lower.includes("minute")) return "minutes";
+  if (/\bhour/.test(lower)) return "hours";
+  return null;
+};
+
+/**
+ * When the plan includes SERVO parts with PWM wired to the board, emit a runnable
+ * `#include <Servo.h>` scaffold: clock-style demo when ids suggest second/minute hands,
+ * otherwise a slow once-per-second position update (no fast sweep — avoids servo buzz).
+ * @param {string} [wireComments] optional "// - from -> to" lines (same shape as other scaffolds).
+ */
+export const buildServoSketchFromPlan = (plan, wireComments = "") => {
+  const boardId = String(plan?.board?.id || "").trim();
+  const boardType = String(plan?.board?.type || "").trim();
+  if (!boardId || !boardType) return null;
+
+  const components = Array.isArray(plan?.components) ? plan.components : [];
+  const servos = components.filter((c) => c?.type === "SERVO");
+  if (servos.length === 0) return null;
+
+  const wires = Array.isArray(plan?.connections) ? plan.connections : [];
+  const isBoardEndpoint = (ep) => ep?.id === boardId && ep?.type === boardType;
+
+  const getBoardPinConnectedTo = (componentId, componentType, componentPin) => {
+    for (const w of wires) {
+      const from = w?.from;
+      const to = w?.to;
+      if (!from || !to) continue;
+
+      const aIsTarget = from.id === componentId && from.type === componentType && from.pin === componentPin;
+      const bIsTarget = to.id === componentId && to.type === componentType && to.pin === componentPin;
+
+      if (aIsTarget && isBoardEndpoint(to)) return to.pin;
+      if (bIsTarget && isBoardEndpoint(from)) return from.pin;
+    }
+    return null;
+  };
+
+  const resolved = servos
+    .map((c) => {
+      const id = String(c?.id || "").trim();
+      if (!id) return null;
+      const pwmBoardPin = getBoardPinConnectedTo(id, "SERVO", "PWM");
+      const attachArg = pwmBoardPin != null ? boardPinToServoAttachArg(pwmBoardPin) : null;
+      if (attachArg == null) return { id, ok: false };
+      return { id, ok: true, attachArg };
+    })
+    .filter(Boolean);
+
+  const ok = resolved.filter((r) => r.ok);
+  if (ok.length === 0) return null;
+
+  ok.sort((a, b) => a.id.localeCompare(b.id));
+
+  const usedNames = new Set();
+  for (const r of ok) {
+    r.varName = servoIdToCppVarName(r.id, usedNames);
+    r.role = inferServoClockRole(r.id);
+  }
+
+  const countRole = (role) => ok.filter((r) => r.role === role).length;
+  const dualClock =
+    ok.length === 2 && countRole("seconds") === 1 && countRole("minutes") === 1;
+  const tripleClock =
+    ok.length === 3
+    && countRole("hours") === 1
+    && countRole("minutes") === 1
+    && countRole("seconds") === 1;
+
+  let globals = "";
+  let loopBody = "";
+  let behaviorNote = "Slow demo (1 Hz); replace with your control logic.";
+
+  if (tripleClock) {
+    const h = ok.find((r) => r.role === "hours");
+    const m = ok.find((r) => r.role === "minutes");
+    const s = ok.find((r) => r.role === "seconds");
+    globals = "int hours = 0;\nint minutes = 0;\nint seconds = 0;\n";
+    behaviorNote = "12h clock demo (1 Hz tick); map each hand 0..59 or 0..11 -> 0..180°.";
+    loopBody = `  ${h.varName}.write(map(hours % 12, 0, 11, 0, 180));
+  ${m.varName}.write(map(minutes, 0, 59, 0, 180));
+  ${s.varName}.write(map(seconds, 0, 59, 0, 180));
+
+  delay(1000);
+
+  seconds++;
+  if (seconds >= 60) {
+    seconds = 0;
+    minutes++;
+  }
+  if (minutes >= 60) {
+    minutes = 0;
+    hours++;
+  }
+  if (hours >= 12) {
+    hours = 0;
+  }`;
+  } else if (dualClock) {
+    const sec = ok.find((r) => r.role === "seconds");
+    const min = ok.find((r) => r.role === "minutes");
+    globals = "int seconds = 0;\nint minutes = 0;\n";
+    behaviorNote = "Clock-style demo: second + minute hands, 1 Hz tick (no continuous sweep).";
+    loopBody = `  ${sec.varName}.write(map(seconds, 0, 59, 0, 180));
+  ${min.varName}.write(map(minutes, 0, 59, 0, 180));
+
+  delay(1000);
+
+  seconds++;
+  if (seconds >= 60) {
+    seconds = 0;
+    minutes++;
+  }
+  if (minutes >= 60) {
+    minutes = 0;
+  }`;
+  } else if (ok.length === 1) {
+    const r = ok[0];
+    if (r.role === "minutes") {
+      globals = "int minutes = 0;\n";
+      loopBody = `  ${r.varName}.write(map(minutes, 0, 59, 0, 180));
+
+  delay(1000);
+  minutes++;
+  if (minutes >= 60) {
+    minutes = 0;
+  }`;
+      behaviorNote = "Single minute hand demo (1 Hz).";
+    } else if (r.role === "hours") {
+      globals = "int hours = 0;\n";
+      loopBody = `  ${r.varName}.write(map(hours % 12, 0, 11, 0, 180));
+
+  delay(1000);
+  hours++;
+  if (hours >= 12) {
+    hours = 0;
+  }`;
+      behaviorNote = "Single hour hand demo (1 Hz, 12h dial).";
+    } else {
+      // seconds or unknown — seconds counter keeps motion slow (1 Hz).
+      globals = "int seconds = 0;\n";
+      loopBody = `  ${r.varName}.write(map(seconds, 0, 59, 0, 180));
+
+  delay(1000);
+  seconds++;
+  if (seconds >= 60) {
+    seconds = 0;
+  }`;
+      behaviorNote = "Single-servo slow demo (1 Hz).";
+    }
+  } else {
+    // N servos, no full clock layout — staggered positions, update once per second.
+    globals = "int demoSec = 0;\n";
+    const n = ok.length;
+    const writeBlock = ok
+      .map((r, i) => {
+        const off = Math.floor((60 / n) * i);
+        return `  ${r.varName}.write(map((demoSec + ${off}) % 60, 0, 59, 0, 180));`;
+      })
+      .join("\n");
+    loopBody = `${writeBlock}
+
+  delay(1000);
+  demoSec = (demoSec + 1) % 60;`;
+  }
+
+  const servoDecls = ok.map((r) => `Servo ${r.varName};`).join("\n");
+  const attachLines = ok.map((r) => `  ${r.varName}.attach(${r.attachArg}); // ${r.id}: PWM`).join("\n");
+
+  const planHeader = wireComments.trim()
+    ? `// Wiring plan:\n${wireComments.trim()}\n\n`
+    : "";
+
+  return `// Generated by NovaAI
+${planHeader}// ${behaviorNote}
+
+#include <Servo.h>
+
+${servoDecls}
+${globals ? `\n${globals}` : ""}
+void setup() {
+${attachLines ? `${attachLines}\n` : ""}
+}
+
+void loop() {
+${loopBody}
+}
+`;
+};
+
 const buildPlanPrompt = ({ project, userPrompt, registryContext, defaultBoardKey }) => {
   return `
 You are a strict hardware planning assistant.
@@ -629,6 +884,7 @@ Component rules (must follow):
   - If attrs.colon is true or "1" (clock/colon on), you MUST wire pin CLN on that display to the board. If colon is false/omitted/"", do NOT wire CLN.
 - DS1307: each DS1307 MUST have pin GND wired to a board GND pin and pin 5V wired to a board 5V rail (5V, 5V.1, 5V.2, etc.).
 - PUSHBUTTON and PUSHBUTTON_6MM: each button MUST have at least two different button pins each wired to the board (typically one to a digital/analog input and one to GND for INPUT_PULLUP sketches).
+- SERVO (Wokwi wokwi-servo): optional attrs only horn ("single"|"double"|"cross") and hornColor (CSS color). Do not put angle or other simulator/runtime fields in attrs; motion is sketch-driven.
 
 REGISTRY CONTEXT (compressed):
 ${JSON.stringify(registryContext)}
@@ -710,7 +966,7 @@ ${JSON.stringify(failedPlan)}
 Rules (unchanged):
 - Return ONLY valid JSON. No markdown. No prose. No trailing commas. NO COMMENTS.
 - Pins must exist on the component in REGISTRY CONTEXT.
-- SEVEN_SEGMENT_4: wire DIG1-DIG4, A-G, COM; if attrs.colon true or "1" also wire CLN; if colon off do not wire CLN. DS1307: GND+5V to board. Pushbuttons: two board connections per button.
+- SEVEN_SEGMENT_4: wire DIG1-DIG4, A-G, COM; if attrs.colon true or "1" also wire CLN; if colon off do not wire CLN. DS1307: GND+5V to board. Pushbuttons: two board connections per button. SERVO: attrs only horn + hornColor; no angle.
 
 REGISTRY CONTEXT (compressed):
 ${JSON.stringify(registryContext)}
@@ -916,7 +1172,22 @@ ${loopDirFlip ? `\n${loopDirFlip}\n` : ""}
 `;
   })();
 
-  const sketchIno = a4988Sketch || `// Generated by NovaAI\n// This is a minimal scaffold. Add behavior based on your wiring plan.\n${wireComments ? `\n// Wiring plan:\n${wireComments}\n` : ""}\nvoid setup() {\n  Serial.begin(9600);\n}\n\nvoid loop() {\n  delay(100);\n}\n`;
+  const servoSketch = buildServoSketchFromPlan(normalizedPlan, wireComments);
+
+  const sketchIno =
+    a4988Sketch
+    || servoSketch
+    || `// Generated by NovaAI
+// This is a minimal scaffold. Add behavior based on your wiring plan.
+${wireComments ? `\n// Wiring plan:\n${wireComments}\n` : ""}
+void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  delay(100);
+}
+`;
 
   return {
     sketchIno,

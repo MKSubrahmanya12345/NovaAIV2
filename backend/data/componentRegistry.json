@@ -487,7 +487,6 @@
   "SERVO": {
     "wokwiType": "wokwi-servo",
     "attrs": {
-      "angle": { "type": "number", "default": 0 },
       "horn": { "type": "string", "default": "single" },
       "hornColor": { "type": "string", "default": "#ccc" }
     },
