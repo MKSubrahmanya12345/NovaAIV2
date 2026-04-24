@@ -1,0 +1,22 @@
+/**
+ * Workspace chat scroll surfaces — imported only from ProjectChat, ComponentsChat, DesignChat.
+ * Uses theme tokens from index.css :root for scrollbar thumb tint.
+ */
+.workspaceChatScroll {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text-muted) 28%, transparent) transparent;
+}
+
+.workspaceChatScroll::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.workspaceChatScroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text-muted) 35%, transparent);
+  border-radius: 999px;
+}
+
+.workspaceChatScroll::-webkit-scrollbar-track {
+  background: transparent;
+}

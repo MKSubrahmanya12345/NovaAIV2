@@ -31,6 +31,20 @@ const formatWhen = (value = "") => {
   }
 };
 
+/** Open a local folder in VS Code (uses the `vscode://file/...` protocol handler). */
+const openProjectFolderInVSCode = (folderPath) => {
+  const raw = String(folderPath || "").trim();
+  if (!raw) return false;
+  const normalized = raw.replace(/\\/g, "/");
+  const vscodeUrl = `vscode://file/${encodeURI(normalized)}`;
+  try {
+    window.location.assign(vscodeUrl);
+  } catch {
+    window.open(vscodeUrl, "_blank", "noopener,noreferrer");
+  }
+  return true;
+};
+
 const hasFilePath = (node, targetPath) => {
   if (!node || !targetPath) return false;
   if (node.type === "file") return node.path === targetPath;
@@ -497,17 +511,38 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
     AXIOS_CONFIG
   ));
 
-  const runProject = () => runAction("Run", () => axios.post(
-    `${API_BASE}/wokwi/run`,
-    {
-      projectId,
-      projectPath: localProjectPath.trim(),
-      timeoutMs: Number(timeoutMs) || 20000,
-      expectText: expectText.trim(),
-      failText: failText.trim()
-    },
-    AXIOS_CONFIG
-  ));
+  const runProject = () => {
+    const projectPath = localProjectPath.trim();
+    if (!projectPath) {
+      toast.error("Set a local Wokwi project path first.");
+      return;
+    }
+    if (openProjectFolderInVSCode(projectPath)) {
+      toast.success("Opening project folder in VS Code…");
+    }
+    return runAction("Run", () => axios.post(
+      `${API_BASE}/wokwi/run`,
+      {
+        projectId,
+        projectPath,
+        timeoutMs: Number(timeoutMs) || 20000,
+        expectText: expectText.trim(),
+        failText: failText.trim()
+      },
+      AXIOS_CONFIG
+    ));
+  };
+
+  const openVsCodeOnly = () => {
+    const projectPath = localProjectPath.trim();
+    if (!projectPath) {
+      toast.error("Set a local Wokwi project path first.");
+      return;
+    }
+    if (openProjectFolderInVSCode(projectPath)) {
+      toast.success("Opening project folder in VS Code…");
+    }
+  };
 
   const runScenario = () => runAction("Scenario", () => axios.post(
     `${API_BASE}/wokwi/scenario`,
@@ -541,7 +576,8 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
           projectId,
           projectPath: localProjectPath.trim(),
           diagramFile: diagramFile.trim() || "diagram.json",
-          sketchFile: sketchFile.trim() || "sketch.ino"
+          sketchFile: sketchFile.trim() || "sketch.ino",
+          includeSourceBundle: true
         },
         AXIOS_CONFIG
       );
@@ -771,15 +807,15 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
   };
 
   return (
-    <div className={`h-full overflow-hidden ${isDark ? "bg-[#101929] text-[#e2e8f0]" : "bg-[#f3efe6] text-[#1f2937]"}`}>
-      <div className="grid h-full min-h-0 grid-cols-1 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className={`min-h-0 overflow-y-auto border-b px-4 py-4 xl:border-b-0 xl:border-r ${isDark ? "border-[#223247] bg-[#111a28]" : "border-[#d8cfbf] bg-[#f8f3ea]"}`}>
+    <div className={`h-full min-h-0 overflow-hidden font-sans ${isDark ? "bg-[#0b0f14] text-[#e8eef4]" : "bg-[#f3efe6] text-[#1f2937]"}`}>
+      <div className="grid h-full min-h-0 grid-cols-1 xl:grid-cols-[minmax(240px,17rem)_minmax(0,1fr)_minmax(240px,18rem)]">
+        <aside className={`scrollbar-hide min-h-0 overflow-y-auto border-b px-4 py-4 xl:border-b-0 xl:border-r ${isDark ? "border-white/[0.08] bg-[#0f1419]" : "border-[#d8cfbf] bg-[#f8f3ea]"}`}>
           <div className="space-y-4">
             <div>
               <p className={`text-[11px] font-semibold uppercase tracking-[0.25em] ${isDark ? "text-[#93c5fd]" : "text-[#0f766e]"}`}>SimulatorAI</p>
               <h2 className="mt-1 text-lg font-semibold">Wokwi Workbench</h2>
               <p className={`mt-1 text-xs leading-relaxed ${isDark ? "text-[#8fa2bf]" : "text-[#6b7280]"}`}>
-                Browse local project files, edit them inline, and keep disk changes in sync without your custom VS Code extension.
+                Multi-file Wokwi projects (.ino, .cpp/.h, diagram.json) are listed on the left. Design AI receives a capped bundle of those sources when your local path is set. Run also opens the same folder in VS Code if the editor is installed.
               </p>
             </div>
 
@@ -876,7 +912,7 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
                 </button>
               </div>
 
-              <div className="mt-1 max-h-[42vh] overflow-y-auto">
+              <div className="scrollbar-hide mt-1 max-h-[min(40svh,22rem)] min-h-0 overflow-y-auto">
                 {tree?.children?.length ? (
                   tree.children.map((child) => (
                     <ExplorerNode
@@ -1015,12 +1051,12 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
           </div>
         </main>
 
-        <aside className={`min-h-0 overflow-y-auto border-t px-4 py-4 xl:border-t-0 xl:border-l ${isDark ? "border-[#223247] bg-[#111a28]" : "border-[#d8cfbf] bg-[#f8f3ea]"}`}>
+        <aside className={`scrollbar-hide min-h-0 overflow-y-auto border-t px-4 py-4 xl:border-t-0 xl:border-l ${isDark ? "border-white/[0.08] bg-[#0f1419]" : "border-[#d8cfbf] bg-[#f8f3ea]"}`}>
           <div className="space-y-4">
             <div className={`rounded-2xl border px-3 py-3 ${isDark ? "border-[#304764] bg-[#132033]" : "border-[#d8cfbf] bg-white"}`}>
               <p className="text-[11px] font-semibold uppercase tracking-[0.16em]">Bench Actions</p>
               <p className={`mt-1 text-xs leading-relaxed ${isDark ? "text-[#8fa2bf]" : "text-[#6b7280]"}`}>
-                Run the selected local Wokwi project after saving your current editor buffer.
+                Run saves your buffer, opens the project folder in VS Code, then runs wokwi-cli. Use the sketch file field for the main .ino (e.g. alarm-clock.ino). Compile stages all top-level .ino/.cpp/.h sources together.
               </p>
 
               <div className="mt-3 grid gap-3">
@@ -1109,6 +1145,13 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
                 </button>
                 <button
                   type="button"
+                  onClick={openVsCodeOnly}
+                  className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${isDark ? "bg-[#1e3a2f] text-[#86efac] hover:bg-[#14532d]" : "bg-[#d1fae5] text-[#047857] hover:bg-[#a7f3d0]"}`}
+                >
+                  VS Code
+                </button>
+                <button
+                  type="button"
                   onClick={runProject}
                   disabled={Boolean(runningAction)}
                   className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${isDark ? "bg-[#17263a] text-[#93c5fd] hover:bg-[#1d3048]" : "bg-[#ece5d8] text-[#0f766e] hover:bg-[#e2d8c7]"} ${runningAction ? "cursor-not-allowed opacity-60" : ""}`}
@@ -1126,7 +1169,7 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
                 <button
                   type="button"
                   onClick={refreshEvidence}
-                  className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${isDark ? "border-[#36506f] bg-[#132033] hover:bg-[#1d3048]" : "border-[#d8cfbf] bg-white hover:bg-[#f4efe6]"}`}
+                  className={`col-span-2 rounded-xl border px-3 py-2 text-xs font-semibold transition ${isDark ? "border-[#36506f] bg-[#132033] hover:bg-[#1d3048]" : "border-[#d8cfbf] bg-white hover:bg-[#f4efe6]"}`}
                 >
                   Refresh
                 </button>
@@ -1160,7 +1203,7 @@ export default function SimulatorWorkbench({ projectId, projectSnapshot, onProje
                 </button>
               </div>
 
-              <pre className={`mt-3 max-h-[32vh] overflow-auto rounded-xl border px-3 py-3 text-[11px] leading-relaxed ${isDark ? "border-[#304764] bg-[#0f1727] text-[#dbe7f5]" : "border-[#d8cfbf] bg-[#faf7f1] text-[#1f2937]"}`}>
+              <pre className={`scrollbar-hide mt-3 max-h-[min(38svh,20rem)] overflow-auto rounded-xl border px-3 py-3 font-mono text-[12px] leading-relaxed ${isDark ? "border-white/[0.1] bg-[#0b0f14] text-[#dbe7f5]" : "border-[#d8cfbf] bg-[#faf7f1] text-[#1f2937]"}`}>
                 {lastResult ? pretty(lastResult) : "No simulator action output yet."}
               </pre>
             </div>

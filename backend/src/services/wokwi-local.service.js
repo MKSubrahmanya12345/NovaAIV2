@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, mkdir, writeFile, rm, readdir, readFile, stat } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, rm, readdir, readFile, stat, copyFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -44,6 +44,36 @@ const PREFERRED_WORKBENCH_FILES = [
   "smoke.test.yaml",
   "smoke.test.yml"
 ];
+
+/** Extensions included in simulator AI bundles and compile staging (top-level project sources). */
+const SOURCE_BUNDLE_EXT = new Set([
+  ".ino",
+  ".cpp",
+  ".cc",
+  ".c",
+  ".h",
+  ".hpp",
+  ".S",
+  ".s",
+  ".inc"
+]);
+
+const MAX_SOURCE_BUNDLE_FILES = 40;
+const MAX_SOURCE_BUNDLE_FILE_CHARS = 24_000;
+const MAX_SOURCE_BUNDLE_TOTAL_CHARS = 220_000;
+
+const isUnderBuildOrArtifacts = (relPath = "") => {
+  const n = String(relPath || "").replace(/\\/g, "/").toLowerCase();
+  return n.startsWith("build/") || n.startsWith(".novaai/") || n.includes("/build/");
+};
+
+const shouldIncludeInSourceBundle = (relPath = "") => {
+  if (!relPath || isUnderBuildOrArtifacts(relPath)) return false;
+  const ext = path.extname(relPath).toLowerCase();
+  if (SOURCE_BUNDLE_EXT.has(ext)) return true;
+  const lower = relPath.toLowerCase();
+  return lower === "libraries.txt" || lower.endsWith("/libraries.txt");
+};
 
 const trimTail = (value = "", max = MAX_TAIL) => {
   const text = String(value || "");
@@ -384,6 +414,43 @@ export const writeWokwiProjectFiles = async ({
   };
 };
 
+const stageMultiFileSketchForCompile = async (projectPath, sketchFile) => {
+  const rootPath = getProjectRoot(projectPath);
+  const normalizedSketch = toWorkbenchPath(sketchFile);
+  const primaryAbs = path.join(rootPath, normalizedSketch);
+
+  if (!existsSync(primaryAbs)) {
+    throw new Error(`Sketch file does not exist: ${primaryAbs}`);
+  }
+
+  const primaryName = path.basename(primaryAbs);
+  const sketchFolderName = path.basename(primaryName, path.extname(primaryName));
+  if (!sketchFolderName) {
+    throw new Error(`Invalid sketch file name: ${sketchFile}`);
+  }
+
+  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "NovaAI-arduino-"));
+  const tempSketchDir = path.join(tmpRoot, sketchFolderName);
+  await mkdir(tempSketchDir, { recursive: true });
+
+  const entries = await readdir(rootPath, { withFileTypes: true });
+  for (const ent of entries) {
+    if (!ent.isFile()) continue;
+    const ext = path.extname(ent.name).toLowerCase();
+    if (!SOURCE_BUNDLE_EXT.has(ext)) continue;
+    const from = path.join(rootPath, ent.name);
+    const to = path.join(tempSketchDir, ent.name);
+    await copyFile(from, to);
+  }
+
+  const primaryDest = path.join(tempSketchDir, primaryName);
+  if (!existsSync(primaryDest)) {
+    await copyFile(primaryAbs, primaryDest);
+  }
+
+  return { tmpRoot, tempSketchDir, sketchFolderName };
+};
+
 export const compileWokwiSketch = async ({
   projectPath,
   sketchFile = "sketch.ino",
@@ -394,29 +461,25 @@ export const compileWokwiSketch = async ({
     throw new Error("projectPath is required");
   }
 
-  const sketchPath = path.join(projectPath, sketchFile);
+  const rootPath = getProjectRoot(projectPath);
+  const sketchPath = path.join(rootPath, toWorkbenchPath(sketchFile));
   if (!existsSync(sketchPath)) {
     throw new Error(`Sketch file does not exist: ${sketchPath}`);
   }
 
   const arduinoCliPath = resolveArduinoCliPath();
-  const buildDir = path.join(projectPath, "build");
+  const buildDir = path.join(rootPath, "build");
   await mkdir(buildDir, { recursive: true });
 
-  const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "NovaAI-arduino-"));
-  const sketchName = "NovaAI_sketch";
-  const tempSketchDir = path.join(tmpRoot, sketchName);
-  const tempSketchFile = path.join(tempSketchDir, `${sketchName}.ino`);
-
-  await mkdir(tempSketchDir, { recursive: true });
-  const sourceCode = await readFile(sketchPath, "utf8");
-  await writeFile(tempSketchFile, sourceCode, "utf8");
-
+  let tmpRoot = "";
   try {
+    const { tmpRoot: stagedRoot, tempSketchDir } = await stageMultiFileSketchForCompile(projectPath, sketchFile);
+    tmpRoot = stagedRoot;
+
     const compileResult = await runCommand({
       command: arduinoCliPath,
       args: ["compile", "--fqbn", fqbn, "--output-dir", buildDir, tempSketchDir],
-      cwd: projectPath,
+      cwd: rootPath,
       timeoutMs
     });
 
@@ -429,11 +492,12 @@ export const compileWokwiSketch = async ({
       stderrTail: trimTail(compileResult.stderr),
       summary: compileResult.ok ? "Compile succeeded" : `Compile failed | exitCode=${compileResult.exitCode}`,
       metadata: {
-        projectPath,
+        projectPath: rootPath,
         sketchFile,
         fqbn,
         buildDir,
-        timedOut: compileResult.timedOut
+        timedOut: compileResult.timedOut,
+        compileMode: "multi-file-staged"
       },
       ranAt: new Date()
     };
@@ -451,7 +515,9 @@ export const compileWokwiSketch = async ({
       }
     };
   } finally {
-    await rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+    if (tmpRoot) {
+      await rm(tmpRoot, { recursive: true, force: true }).catch(() => {});
+    }
   }
 };
 
@@ -470,6 +536,89 @@ export const readWokwiProjectFiles = async ({
   return {
     diagramJson: existsSync(diagramPath) ? await readFile(diagramPath, "utf8") : "",
     sketchCode: existsSync(sketchPath) ? await readFile(sketchPath, "utf8") : ""
+  };
+};
+
+/**
+ * Collects text sources (.ino/.cpp/.h/…) for simulator + design AI prompts.
+ * Respects per-file and total character budgets to avoid oversized prompts.
+ */
+export const readWorkbenchSourceBundle = async ({
+  projectPath,
+  diagramFile = "diagram.json",
+  sketchFile = "sketch.ino",
+  maxFiles = MAX_SOURCE_BUNDLE_FILES,
+  maxFileChars = MAX_SOURCE_BUNDLE_FILE_CHARS,
+  maxTotalChars = MAX_SOURCE_BUNDLE_TOTAL_CHARS
+}) => {
+  const rootPath = getProjectRoot(projectPath);
+  const workbench = await scanWokwiWorkbenchTree({ projectPath: rootPath });
+  const files = collectWorkbenchFiles(workbench.tree).filter((f) => f.isText);
+
+  const candidates = [];
+  const add = (rel) => {
+    const x = toWorkbenchPath(rel);
+    if (!x || candidates.includes(x)) return;
+    candidates.push(x);
+  };
+
+  add(diagramFile);
+  add(sketchFile);
+  add("libraries.txt");
+  add("wokwi.toml");
+
+  for (const f of files) {
+    if (shouldIncludeInSourceBundle(f.path)) {
+      add(f.path);
+    }
+  }
+
+  const snippets = [];
+  let totalChars = 0;
+  let omittedFileCount = 0;
+
+  for (const relPath of candidates) {
+    if (snippets.length >= maxFiles) {
+      omittedFileCount += candidates.length - snippets.length;
+      break;
+    }
+
+    try {
+      const { file, content } = await readWokwiWorkbenchFile({
+        projectPath: rootPath,
+        filePath: relPath
+      });
+
+      if (!file?.isText) continue;
+
+      const raw = String(content || "");
+      const truncated = raw.length > maxFileChars;
+      const slice = truncated ? raw.slice(0, maxFileChars) : raw;
+      const entryCost = slice.length + relPath.length + 48;
+      if (totalChars + entryCost > maxTotalChars) {
+        omittedFileCount += candidates.length - snippets.length;
+        break;
+      }
+
+      totalChars += entryCost;
+      snippets.push({
+        path: relPath,
+        content: slice,
+        truncated
+      });
+    } catch {
+      omittedFileCount += 1;
+    }
+  }
+
+  return {
+    projectPath: workbench.projectPath,
+    diagramFile: toWorkbenchPath(diagramFile),
+    sketchFile: toWorkbenchPath(sketchFile),
+    filePaths: snippets.map((s) => s.path),
+    snippets,
+    truncatedProject: omittedFileCount > 0,
+    omittedFileCount
   };
 };
 

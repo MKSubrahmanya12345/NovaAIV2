@@ -135,6 +135,59 @@ const stripControlPhrases = (value = "") => {
   return next;
 };
 
+/** Smaller first TTS request for long replies; merge tiny tails to avoid spam. */
+const TTS_MIN_CHUNK = 36;
+const TTS_MAX_CHUNK = 520;
+
+const splitTextForTts = (text = "") => {
+  const t = normalizeSpeechText(text);
+  if (!t) return [];
+  if (t.length <= TTS_MAX_CHUNK) return [t];
+
+  const sentences = t.split(/(?<=[.!?])\s+/).map((s) => s.trim()).filter(Boolean);
+  if (sentences.length === 0) return [t];
+
+  const chunks = [];
+  let cur = "";
+
+  const flushCur = () => {
+    const v = cur.trim();
+    if (v) chunks.push(v);
+    cur = "";
+  };
+
+  for (const s of sentences) {
+    if (!cur) {
+      cur = s;
+      continue;
+    }
+    const merged = `${cur} ${s}`.trim();
+    if (merged.length <= TTS_MAX_CHUNK) {
+      cur = merged;
+    } else {
+      if (cur.length < TTS_MIN_CHUNK && chunks.length > 0) {
+        const prev = chunks.pop();
+        cur = `${prev} ${cur}`.trim();
+      }
+      flushCur();
+      cur = s;
+    }
+  }
+  flushCur();
+
+  const hardWrapped = [];
+  for (const c of chunks) {
+    let rest = c;
+    while (rest.length > TTS_MAX_CHUNK) {
+      hardWrapped.push(rest.slice(0, TTS_MAX_CHUNK));
+      rest = rest.slice(TTS_MAX_CHUNK).trim();
+    }
+    if (rest) hardWrapped.push(rest);
+  }
+
+  return hardWrapped.length > 0 ? hardWrapped : [t];
+};
+
 export default function useVoiceGuidance({
   enabled,
   rate,
@@ -169,6 +222,8 @@ export default function useVoiceGuidance({
   const shouldListenRef = useRef({ active: false, restartTimer: null });
   const ttsRef = useRef({ audio: null, url: "" });
   const ttsTokenRef = useRef(0);
+  const ttsAbortRef = useRef(null);
+  const isSpeakingRef = useRef(false);
   const onFinalTranscriptRef = useRef(onFinalTranscript);
   const onInterimTranscriptRef = useRef(onInterimTranscript);
   const onErrorRef = useRef(onError);
@@ -259,6 +314,14 @@ export default function useVoiceGuidance({
     ttsTokenRef.current += 1;
     fallbackTtsTokenRef.current += 1;
 
+    try {
+      ttsAbortRef.current?.abort();
+    } catch {
+      // ignore
+    }
+    ttsAbortRef.current = null;
+    isSpeakingRef.current = false;
+
     if (isNativeSpeechSupported) {
       try {
         window.speechSynthesis.cancel();
@@ -300,11 +363,13 @@ export default function useVoiceGuidance({
 
       utterance.onend = () => {
         if (token !== fallbackTtsTokenRef.current) return;
+        isSpeakingRef.current = false;
         setIsSpeaking(false);
       };
 
       utterance.onerror = () => {
         if (token !== fallbackTtsTokenRef.current) return;
+        isSpeakingRef.current = false;
         setIsSpeaking(false);
       };
 
@@ -391,6 +456,16 @@ export default function useVoiceGuidance({
       const transcript = normalizeSpeechText(res.data?.transcript || "");
       if (!transcript) return;
 
+      // Barge-in: while AI TTS is playing, user speech (hands-free) stops playback.
+      if (
+        isSpeakingRef.current
+        && handsFreeRef.current
+        && transcript.length >= 12
+        && !/^listening\.?\.?\.?$/i.test(transcript)
+      ) {
+        stopSpeaking();
+      }
+
       const previous = latestInterimRef.current;
       const next = mergeTranscriptWindows(previous, transcript);
       latestInterimRef.current = next;
@@ -423,7 +498,7 @@ export default function useVoiceGuidance({
     } finally {
       chunkTranscribeLockRef.current = false;
     }
-  }, [language, patchDiagnostics, scheduleAutoSendFromSilence]);
+  }, [language, patchDiagnostics, scheduleAutoSendFromSilence, stopSpeaking]);
 
   const internalStopListening = useCallback((permanent = true) => {
     clearRestartTimer();
@@ -455,6 +530,10 @@ export default function useVoiceGuidance({
       return;
     }
 
+    if (isSpeakingRef.current) {
+      stopSpeaking();
+    }
+
     clearRestartTimer();
     shouldListenRef.current.active = true;
     chunksRef.current = [];
@@ -462,7 +541,13 @@ export default function useVoiceGuidance({
     latestInterimRef.current = "";
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true
+        }
+      });
       mediaStreamRef.current = stream;
 
       const recorderMimeType = getRecorderMimeType();
@@ -526,7 +611,16 @@ export default function useVoiceGuidance({
         message: "Microphone access is blocked. Allow microphone permission and try again."
       });
     }
-  }, [clearAutoSendTimer, clearRestartTimer, finalizeBufferedTranscript, isRecognitionSupported, releaseStream, transcribeChunkForCaption]);
+  }, [
+    clearAutoSendTimer,
+    clearRestartTimer,
+    finalizeBufferedTranscript,
+    isRecognitionSupported,
+    patchDiagnostics,
+    releaseStream,
+    stopSpeaking,
+    transcribeChunkForCaption
+  ]);
 
   const stopListening = useCallback(() => {
     internalStopListening(true);
@@ -543,64 +637,118 @@ export default function useVoiceGuidance({
     if (!enabledRef.current || !isSpeechSupported || !nextText) return;
 
     stopSpeaking();
-    const token = ttsTokenRef.current + 1;
-    ttsTokenRef.current = token;
+    const sessionToken = ttsTokenRef.current + 1;
+    ttsTokenRef.current = sessionToken;
+    isSpeakingRef.current = true;
     setIsSpeaking(true);
 
-    try {
-      const res = await axiosInstance.post("/voice/tts", {
-        text: nextText,
-        modelId: "eleven_multilingual_v2",
-        outputFormat: "mp3_44100_128",
-        language: normalizeLanguage(language),
-        rate: Number.isFinite(rate) ? rate : 0.9
-      });
+    const chunks = splitTextForTts(nextText);
+    if (chunks.length === 0) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      return;
+    }
 
-      if (token !== ttsTokenRef.current) {
-        return;
-      }
+    const isActive = () => sessionToken === ttsTokenRef.current;
 
-      const base64 = String(res.data?.audioBase64 || "");
-      const contentType = String(res.data?.contentType || "audio/mpeg");
-      if (!base64) {
-        throw new Error("TTS returned empty audio payload");
-      }
-
+    const base64ToBlob = (base64, contentType) => {
       const binary = atob(base64);
       const bytes = new Uint8Array(binary.length);
       for (let index = 0; index < binary.length; index += 1) {
         bytes[index] = binary.charCodeAt(index);
       }
+      return new Blob([bytes], { type: contentType });
+    };
 
-      const blob = new Blob([bytes], { type: contentType });
-      const url = URL.createObjectURL(blob);
-      const audio = new Audio(url);
+    let completedCloudTts = false;
 
-      ttsRef.current = { audio, url };
-
-      audio.onended = () => {
-        if (ttsRef.current.url) {
-          URL.revokeObjectURL(ttsRef.current.url);
+    const playOneMp3Blob = (blob) =>
+      new Promise((resolve, reject) => {
+        if (!isActive()) {
+          resolve();
+          return;
         }
-        ttsRef.current = { audio: null, url: "" };
-        setIsSpeaking(false);
-      };
 
-      audio.onerror = () => {
-        if (ttsRef.current.url) {
-          URL.revokeObjectURL(ttsRef.current.url);
+        const prev = ttsRef.current;
+        if (prev.audio) {
+          try {
+            prev.audio.pause();
+          } catch {
+            // ignore
+          }
         }
-        ttsRef.current = { audio: null, url: "" };
-        setIsSpeaking(false);
-        onErrorRef.current?.({
-          code: "tts_failed",
-          recoverable: true,
-          message: "Voice playback failed"
-        });
-      };
+        if (prev.url) {
+          URL.revokeObjectURL(prev.url);
+        }
 
-      await audio.play();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        ttsRef.current = { audio, url };
+
+        audio.onended = () => {
+          if (ttsRef.current.url === url) {
+            URL.revokeObjectURL(url);
+            ttsRef.current = { audio: null, url: "" };
+          }
+          resolve();
+        };
+
+        audio.onerror = () => {
+          if (ttsRef.current.url === url) {
+            URL.revokeObjectURL(url);
+            ttsRef.current = { audio: null, url: "" };
+          }
+          reject(new Error("Voice playback failed"));
+        };
+
+        audio.play().catch(reject);
+      });
+
+    try {
+      for (const chunk of chunks) {
+        if (!isActive()) return;
+
+        const ac = new AbortController();
+        ttsAbortRef.current = ac;
+
+        const res = await axiosInstance.post(
+          "/voice/tts",
+          {
+            text: chunk,
+            modelId: "eleven_multilingual_v2",
+            outputFormat: "mp3_44100_128",
+            language: normalizeLanguage(language),
+            rate: Number.isFinite(rate) ? rate : 0.9
+          },
+          { signal: ac.signal }
+        );
+
+        if (!isActive()) return;
+
+        const base64 = String(res.data?.audioBase64 || "");
+        const contentType = String(res.data?.contentType || "audio/mpeg");
+        if (!base64) {
+          throw new Error("TTS returned empty audio payload");
+        }
+
+        const blob = base64ToBlob(base64, contentType);
+        await playOneMp3Blob(blob);
+        if (!isActive()) return;
+      }
+
+      completedCloudTts = true;
     } catch (event) {
+      if (!isActive()) return;
+
+      const aborted =
+        event?.code === "ERR_CANCELED"
+        || event?.name === "CanceledError"
+        || event?.message === "canceled";
+
+      if (aborted) {
+        return;
+      }
+
       const details = extractErrorDetails(event);
       patchDiagnostics({
         lastTtsStatus: details.status,
@@ -617,12 +765,21 @@ export default function useVoiceGuidance({
         return;
       }
 
+      isSpeakingRef.current = false;
       setIsSpeaking(false);
       onErrorRef.current?.({
         code: "tts_failed",
         recoverable: true,
         message: details.message || "Speech synthesis failed"
       });
+      return;
+    } finally {
+      ttsAbortRef.current = null;
+    }
+
+    if (completedCloudTts && sessionToken === ttsTokenRef.current) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
     }
   }, [isSpeechSupported, language, patchDiagnostics, rate, speakWithBrowserFallback, stopSpeaking]);
 

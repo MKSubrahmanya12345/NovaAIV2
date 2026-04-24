@@ -190,6 +190,7 @@ export default function DesignPage() {
     status: voiceStatus,
     diagnostics: voiceDiagnostics,
     speakText,
+    stopSpeaking,
     startListening,
     stopListening,
     pauseForTyping,
@@ -397,8 +398,8 @@ export default function DesignPage() {
           { withCredentials: true }
         );
 
+        void speakText(res.data.reply);
         setMessages([{ role: "ai", content: res.data.reply }]);
-        speakText(res.data.reply);
         setProject(prev => prev ? { ...prev, designState: res.data.designState } : prev);
         if (res.data?.wokwiContext) {
           setWokwiContext(res.data.wokwiContext);
@@ -406,8 +407,8 @@ export default function DesignPage() {
       } catch (err) {
         const errorMessage = err?.response?.data?.error || "Unable to start Design AI";
         toast.error(errorMessage);
+        void speakText(errorMessage);
         setMessages([{ role: "ai", content: errorMessage }]);
-        speakText(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -452,8 +453,8 @@ export default function DesignPage() {
         { withCredentials: true }
       );
 
+      void speakText(res.data.reply);
       setMessages(prev => [...prev, { role: "ai", content: res.data.reply }]);
-      speakText(res.data.reply);
       setProject(prev => prev ? { ...prev, designState: res.data.designState } : prev);
       if (res.data?.wokwiContext) {
         setWokwiContext(res.data.wokwiContext);
@@ -461,8 +462,8 @@ export default function DesignPage() {
     } catch (err) {
       const errorMessage = err?.response?.data?.error || "Design chat failed";
       toast.error(errorMessage);
+      void speakText(errorMessage);
       setMessages(prev => [...prev, { role: "ai", content: errorMessage }]);
-      speakText(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -722,8 +723,8 @@ export default function DesignPage() {
   };
 
   return (
-    <div className={`h-screen overflow-hidden ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
-      <div className="mx-auto flex h-full w-full max-w-screen-2xl flex-col gap-3 px-4 py-4 lg:px-5">
+    <div className={`flex h-svh min-h-0 flex-col overflow-hidden font-sans ${isDark ? "bg-[#1a1a18] text-[#ecebe8]" : "bg-[#faf9f5] text-[#1f1f1e]"}`}>
+      <div className="mx-auto flex min-h-0 w-full max-w-screen-2xl flex-1 flex-col gap-3 px-4 py-4 lg:px-5">
         <div className={`flex flex-wrap items-center justify-between gap-3 border-b pb-3 ${isDark ? "border-white/10" : "border-black/10"}`}>
           <div>
             <button
@@ -893,6 +894,7 @@ export default function DesignPage() {
                 onToggleVoice={handleToggleVoice}
                 onToggleHandsFree={handleToggleHandsFree}
                 onMicToggle={handleMicToggle}
+                onStopVoice={stopSpeaking}
               />
             </div>
           </section>

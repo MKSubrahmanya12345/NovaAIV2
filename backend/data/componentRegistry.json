@@ -220,9 +220,11 @@
     "wokwiType": "wokwi-stepper-motor",
     "attrs": {
       "arrow": { "type": "string", "default": "" },
+      "value": { "type": "string", "default": "" },
+      "units": { "type": "string", "default": "" },
       "display": { "type": "string", "default": "steps" },
       "gearRatio": { "type": "string", "default": "1:1" },
-      "size": { "type": "string", "default": "23" }
+      "size": { "type": "string", "default": "23", "enum": ["8", "11", "14", "17", "23", "34"] }
     },
     "pins": [
       { "name": "A-", "signals": [] },
@@ -323,6 +325,41 @@
     ],
     "category": "actuator"
   },
+  "LCD_1602": {
+    "wokwiType": "wokwi-lcd1602",
+    "attrs": {
+      "pins": { "type": "string", "default": "full", "enum": ["full", "i2c", "none"] },
+      "backlight": { "type": "boolean", "default": true },
+      "screenOnly": { "type": "boolean", "default": false },
+      "i2cAddress": { "type": "string", "default": "0x27" },
+      "color": { "type": "string", "default": "black" },
+      "background": { "type": "string", "default": "green" },
+      "variant": { "type": "string", "default": "" }
+    },
+    "pins": [
+      { "name": "VSS", "signals": [{ "type": "power", "role": "GND" }] },
+      { "name": "VDD", "signals": [{ "type": "power", "role": "VCC" }] },
+      { "name": "V0", "signals": [] },
+      { "name": "RS", "signals": [] },
+      { "name": "RW", "signals": [] },
+      { "name": "E", "signals": [] },
+      { "name": "D0", "signals": [] },
+      { "name": "D1", "signals": [] },
+      { "name": "D2", "signals": [] },
+      { "name": "D3", "signals": [] },
+      { "name": "D4", "signals": [] },
+      { "name": "D5", "signals": [] },
+      { "name": "D6", "signals": [] },
+      { "name": "D7", "signals": [] },
+      { "name": "A", "signals": [] },
+      { "name": "K", "signals": [] },
+      { "name": "GND", "signals": [{ "type": "power", "role": "GND" }] },
+      { "name": "VCC", "signals": [{ "type": "power", "role": "VCC" }] },
+      { "name": "SDA", "signals": [{ "type": "i2c", "role": "SDA" }] },
+      { "name": "SCL", "signals": [{ "type": "i2c", "role": "SCL" }] }
+    ],
+    "category": "display"
+  },
   "NTC_TEMPERATURE_SENSOR": {
     "wokwiType": "wokwi-ntc-temperature-sensor",
     "attrs": {},
@@ -368,10 +405,13 @@
   "SEVEN_SEGMENT_1": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "common": { "type": "string", "default": "anode" },
+      "commonPin": { "type": "string", "default": "anode" },
       "digits": { "type": "string", "default": "1" },
       "colon": { "type": "string", "default": "" },
-      "color": { "type": "string", "default": "red" }
+      "color": { "type": "string", "default": "red" },
+      "offColor": { "type": "string", "default": "#444" },
+      "background": { "type": "string", "default": "black" },
+      "pins": { "type": "string", "default": "top", "enum": ["top", "extend", "none"] }
     },
     "pins": [
       { "name": "COM.1", "signals": [] },
@@ -390,10 +430,13 @@
   "SEVEN_SEGMENT_2": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "common": { "type": "string", "default": "anode" },
+      "commonPin": { "type": "string", "default": "anode" },
       "digits": { "type": "string", "default": "2" },
       "colon": { "type": "string", "default": "" },
-      "color": { "type": "string", "default": "red" }
+      "color": { "type": "string", "default": "red" },
+      "offColor": { "type": "string", "default": "#444" },
+      "background": { "type": "string", "default": "black" },
+      "pins": { "type": "string", "default": "top", "enum": ["top", "extend", "none"] }
     },
     "pins": [
       { "name": "DIG1", "signals": [] },
@@ -412,10 +455,13 @@
   "SEVEN_SEGMENT_3": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "common": { "type": "string", "default": "anode" },
+      "commonPin": { "type": "string", "default": "anode" },
       "digits": { "type": "string", "default": "3" },
       "colon": { "type": "string", "default": "" },
-      "color": { "type": "string", "default": "red" }
+      "color": { "type": "string", "default": "red" },
+      "offColor": { "type": "string", "default": "#444" },
+      "background": { "type": "string", "default": "black" },
+      "pins": { "type": "string", "default": "top", "enum": ["top", "extend", "none"] }
     },
     "pins": [
       { "name": "DIG1", "signals": [] },
@@ -435,10 +481,13 @@
   "SEVEN_SEGMENT_4": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "common": { "type": "string", "default": "anode" },
+      "commonPin": { "type": "string", "default": "anode" },
       "digits": { "type": "string", "default": "4" },
       "colon": { "type": "string", "default": "" },
-      "color": { "type": "string", "default": "red" }
+      "color": { "type": "string", "default": "red" },
+      "offColor": { "type": "string", "default": "#444" },
+      "background": { "type": "string", "default": "black" },
+      "pins": { "type": "string", "default": "top", "enum": ["top", "extend", "none"] }
     },
     "pins": [
       { "name": "A", "signals": [] },

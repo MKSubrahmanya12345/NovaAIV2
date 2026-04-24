@@ -19,6 +19,7 @@ import {
   writeWokwiProjectFiles,
   compileWokwiSketch,
   readWokwiProjectFiles,
+  readWorkbenchSourceBundle,
   scanWokwiWorkbenchTree,
   readWokwiWorkbenchFile,
   getWokwiWorkbenchFileMeta,
@@ -325,7 +326,13 @@ export const listInteractiveMcpSessions = async (_req, res) => {
 
 export const getLocalWokwiFiles = async (req, res) => {
   try {
-    const { projectId, projectPath = "", diagramFile = "diagram.json", sketchFile = "sketch.ino" } = req.body;
+    const {
+      projectId,
+      projectPath = "",
+      diagramFile = "diagram.json",
+      sketchFile = "sketch.ino",
+      includeSourceBundle = false
+    } = req.body;
 
     const access = await ensureProjectAccess(projectId, req.user._id);
     if (access.error) {
@@ -340,11 +347,27 @@ export const getLocalWokwiFiles = async (req, res) => {
       sketchFile
     });
 
-    res.json({
+    const payload = {
       projectId,
       projectPath: resolvedPath,
       ...files
-    });
+    };
+
+    if (includeSourceBundle) {
+      try {
+        payload.sourceBundle = await readWorkbenchSourceBundle({
+          projectPath: resolvedPath,
+          diagramFile,
+          sketchFile
+        });
+      } catch (bundleError) {
+        payload.sourceBundle = {
+          error: bundleError.message || "Failed to load multi-file source bundle"
+        };
+      }
+    }
+
+    res.json(payload);
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to load local Wokwi files" });
   }

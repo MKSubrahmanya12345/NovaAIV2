@@ -49,37 +49,39 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell min-h-0 flex-1">
       <Suspense fallback={<RouteLoader />}>
-        <Routes>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <Routes>
 
-        {/* HERO */}
-        <Route path="/" element={<HeroPage />} />
+            {/* HERO */}
+            <Route path="/" element={<HeroPage />} />
 
-        {/* AUTH */}
-        <Route
-          path="/auth"
-          element={!authUser ? <AuthPage /> : <Navigate to="/home" />}
-        />
+            {/* AUTH */}
+            <Route
+              path="/auth"
+              element={!authUser ? <AuthPage /> : <Navigate to="/home" />}
+            />
 
-        {/* HOME */}
-        <Route
-          path="/home"
-          element={authUser ? <HomePage /> : <Navigate to="/auth" />}
-        />
+            {/* HOME */}
+            <Route
+              path="/home"
+              element={authUser ? <HomePage /> : <Navigate to="/auth" />}
+            />
 
-        {/* PROJECT */}
-        <Route
-          path="/project/:id"
-          element={authUser ? <ProjectMainPage /> : <Navigate to="/auth" />}
-        />
+            {/* PROJECT */}
+            <Route
+              path="/project/:id"
+              element={authUser ? <ProjectMainPage /> : <Navigate to="/auth" />}
+            />
 
-        <Route
-          path="/project/:id/design"
-          element={authUser ? <DesignPage /> : <Navigate to="/auth" />}
-        />
+            <Route
+              path="/project/:id/design"
+              element={authUser ? <DesignPage /> : <Navigate to="/auth" />}
+            />
 
-        </Routes>
+          </Routes>
+        </div>
       </Suspense>
     </div>
   );

@@ -47,7 +47,7 @@ const EvidenceCard = ({ title, item, isDark }) => {
         {item.ranAt ? new Date(item.ranAt).toLocaleString() : "Unknown run time"}
       </p>
       {item.serialTail ? (
-        <pre className={`mt-3 max-h-28 overflow-auto rounded-lg border p-2 text-[11px] leading-relaxed ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#d9d9d9]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}>
+        <pre className={`scrollbar-hide mt-3 max-h-28 overflow-auto rounded-lg border p-2 font-mono text-[11px] leading-relaxed ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#d9d9d9]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}>
           {item.serialTail}
         </pre>
       ) : null}
@@ -583,7 +583,7 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
   };
 
   return (
-    <div className={`h-full overflow-y-auto px-5 py-5 ${isDark ? "bg-[#222]" : "bg-[#fafafa]"}`}>
+    <div className={`scrollbar-hide h-full overflow-y-auto px-5 py-5 ${isDark ? "bg-[#222]" : "bg-[#fafafa]"}`}>
       <div className="grid gap-4 lg:grid-cols-2">
         <div className={`rounded-xl border p-4 ${isDark ? "border-white/10 bg-[#2a2a2a]" : "border-black/10 bg-white"}`}>
           <p className="text-sm font-semibold">Proof Controls</p>
@@ -831,7 +831,7 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
           />
 
           {mcpSessions.length > 0 ? (
-            <div className={`mt-2 max-h-24 overflow-auto rounded-lg border p-2 text-[11px] ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ccc]" : "border-black/10 bg-[#f7f7f7] text-[#333]"}`}>
+            <div className={`scrollbar-hide mt-2 max-h-24 overflow-auto rounded-lg border p-2 text-[11px] ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ccc]" : "border-black/10 bg-[#f7f7f7] text-[#333]"}`}>
               {mcpSessions.map((session) => (
                 <button
                   key={session.sessionId}
@@ -897,7 +897,7 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
             Clear
           </button>
         </div>
-        <pre className={`mt-3 max-h-80 overflow-auto rounded-lg border p-3 text-[12px] leading-relaxed ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ddd]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}>
+        <pre className={`scrollbar-hide mt-3 max-h-80 overflow-auto rounded-lg border p-3 font-mono text-[12px] leading-relaxed ${isDark ? "border-white/10 bg-[#1f1f1f] text-[#ddd]" : "border-black/10 bg-[#f7f7f7] text-[#222]"}`}>
           {lastResult ? pretty(lastResult) : "No API result yet."}
         </pre>
       </div>

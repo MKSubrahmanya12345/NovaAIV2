@@ -1,7 +1,7 @@
 import Project from "../models/project.model.js";
 import { processDesign } from "../services/ai.services.js";
 import { getWokwiCircuitContext } from "../lib/wokwi-context.js";
-import { readWokwiProjectFiles } from "../services/wokwi-local.service.js";
+import { readWokwiProjectFiles, readWorkbenchSourceBundle } from "../services/wokwi-local.service.js";
 
 const isIdeaFinalized = (project) => {
   return Boolean(project?.ideaState?.summary?.trim()) && (project?.ideaState?.unknowns?.length ?? 0) === 0;
@@ -71,9 +71,25 @@ const getLocalCircuitContext = async (projectPath = "") => {
     }
 
     const diagram = JSON.parse(files.diagramJson);
+
+    let simulatorSources = null;
+    try {
+      simulatorSources = await readWorkbenchSourceBundle({
+        projectPath,
+        diagramFile: "diagram.json",
+        sketchFile: "sketch.ino",
+        maxFiles: 28,
+        maxFileChars: 10_000,
+        maxTotalChars: 120_000
+      });
+    } catch {
+      simulatorSources = null;
+    }
+
     return {
       ...summarizeDiagram(diagram),
-      projectPath
+      projectPath,
+      simulatorSources
     };
   } catch (error) {
     return {
@@ -102,6 +118,25 @@ const resolveDesignWokwiContext = async (project) => {
     connected: false,
     source: "none",
     reason: `${localContext.reason || "Local context unavailable"}. ${remoteContext.reason || "Remote context unavailable"}`
+  };
+};
+
+/** Drop source code bodies from API responses; keep paths for UI. Full snippets stay server-side for AI prompts. */
+const stripSimulatorSourcesForClient = (ctx) => {
+  if (!ctx || typeof ctx !== "object" || !ctx.simulatorSources) return ctx;
+  const { snippets, ...rest } = ctx.simulatorSources;
+  return {
+    ...ctx,
+    simulatorSources: {
+      ...rest,
+      snippets: Array.isArray(snippets)
+        ? snippets.map((s) => ({
+          path: s.path,
+          truncated: Boolean(s.truncated),
+          charCount: typeof s.content === "string" ? s.content.length : 0
+        }))
+        : []
+    }
   };
 };
 
@@ -156,7 +191,7 @@ export const initDesign = async (req, res) => {
     res.json({
       reply: ai.reply,
       designState: project.designState,
-      wokwiContext
+      wokwiContext: stripSimulatorSourcesForClient(wokwiContext)
     });
 
   } catch (err) {
@@ -214,7 +249,7 @@ export const chatDesign = async (req, res) => {
     res.json({
       reply: ai.reply,
       designState: project.designState,
-      wokwiContext
+      wokwiContext: stripSimulatorSourcesForClient(wokwiContext)
     });
 
   } catch (err) {
@@ -237,7 +272,7 @@ export const getDesignContext = async (req, res) => {
     }
 
     const wokwiContext = await resolveDesignWokwiContext(project);
-    res.json({ wokwiContext });
+    res.json({ wokwiContext: stripSimulatorSourcesForClient(wokwiContext) });
   } catch (err) {
     console.error("DESIGN CONTEXT ERROR:", err);
     res.status(500).json({ error: err.message });

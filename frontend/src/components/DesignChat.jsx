@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import "../styles/workspace-chat-scroll.css";
 import { AnimatePresence, motion } from "framer-motion";
 import { useThemeStore } from "../store/useThemeStore";
 
@@ -22,6 +23,7 @@ export default function DesignChat({
   onToggleVoice,
   onToggleHandsFree,
   onMicToggle,
+  onStopVoice,
 }) {
   const { theme } = useThemeStore();
   const isDark = theme === "dark";
@@ -56,8 +58,16 @@ export default function DesignChat({
             : (isDark ? "bg-white/10 text-[#cfcfcf]" : "bg-black/10 text-[#444]");
 
   return (
-    <div className={`flex h-full flex-col ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
-      <div className={`border-b px-4 py-3 ${isDark ? "border-white/10" : "border-black/10"}`}>
+    <div
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden font-sans ${
+        isDark ? "bg-[#1a1a18] text-[#ecebe8]" : "bg-[#faf9f5] text-[#1f1f1e]"
+      }`}
+    >
+      <div
+        className={`shrink-0 border-b px-4 py-3 ${
+          isDark ? "border-[#2f2f2c] bg-[#212120]" : "border-[#e8e6e0] bg-[#f3f2ed]"
+        }`}
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className={`text-[11px] font-semibold uppercase tracking-[0.22em] ${isDark ? "text-[#a3a3a3]" : "text-[#666]"}`}>
@@ -98,6 +108,16 @@ export default function DesignChat({
               {voiceStatus === "listening" || voiceStatus === "duplex" ? "Stop Mic" : "Start Mic"}
             </button>
 
+            {(voiceStatus === "speaking" || voiceStatus === "duplex") && typeof onStopVoice === "function" && (
+              <button
+                type="button"
+                onClick={() => onStopVoice()}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${isDark ? "border-rose-500/40 bg-rose-950/40 text-rose-200 hover:bg-rose-950/60" : "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100"}`}
+              >
+                Stop voice
+              </button>
+            )}
+
             <button
               onClick={onDebug}
               disabled={loading}
@@ -136,7 +156,7 @@ export default function DesignChat({
         </p>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="workspaceChatScroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4">
         <AnimatePresence>
           {messages.map((message, index) => (
             <motion.div
@@ -167,22 +187,42 @@ export default function DesignChat({
         )}
       </div>
 
-      <div className={`border-t p-3 ${isDark ? "border-white/10" : "border-black/10"}`}>
-        <div className="flex items-center gap-2">
-          <input
-            className={`flex-1 border-b bg-transparent px-2 py-2 text-sm outline-none ${isDark ? "border-white/10 placeholder:text-[#777]" : "border-black/10 placeholder:text-[#999]"}`}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => event.key === "Enter" && onSend()}
-            placeholder={voiceEnabled ? "Type to pause voice, or speak using mic controls..." : "Ask for design steps, debugging help, or Wokwi context..."}
-          />
-          <button
-            onClick={onSend}
-            disabled={loading}
-            className={`px-3 py-2 text-sm font-semibold transition ${isDark ? "text-[#e5e5e5] hover:text-white" : "text-[#111] hover:text-black"} ${loading ? "cursor-not-allowed opacity-60" : ""}`}
+      <div
+        className={`sticky bottom-0 z-10 shrink-0 border-t backdrop-blur-md ${
+          isDark ? "border-[#2f2f2c] bg-[#1a1a18]/95" : "border-[#e8e6e0] bg-[#faf9f5]/95"
+        }`}
+      >
+        <div className="mx-auto w-full max-w-6xl px-4 pb-3 pt-2 sm:px-6">
+          <div
+            className={`flex min-h-[52px] items-end gap-2 rounded-[1.75rem] border px-3 py-2 shadow-sm sm:px-4 ${
+              isDark ? "border-[#3d3d3a] bg-[#2a2a27]" : "border-[#dcdad3] bg-white"
+            }`}
           >
-            Send
-          </button>
+            <input
+              type="text"
+              className={`min-h-[44px] min-w-0 flex-1 bg-transparent px-2 py-2 text-[15px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-[#c96442]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+                isDark ? "text-[#ecebe8] placeholder:text-[#7a7974]" : "text-[#1f1f1e] placeholder:text-[#9c9b96]"
+              }`}
+              value={input}
+              onChange={(event) => setInput(event.target.value)}
+              onKeyDown={(event) => event.key === "Enter" && onSend()}
+              placeholder={
+                voiceEnabled
+                  ? "Message (typing pauses voice)…"
+                  : "Design, debug, Wokwi…"
+              }
+              aria-label="Message"
+            />
+            <button
+              type="button"
+              onClick={onSend}
+              disabled={loading || !input.trim()}
+              className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c96442] text-sm font-semibold text-white shadow-sm transition hover:bg-[#b55738] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c96442] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Send"
+            >
+              ↑
+            </button>
+          </div>
         </div>
       </div>
     </div>

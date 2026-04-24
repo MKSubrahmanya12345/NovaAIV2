@@ -4,6 +4,7 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "../store/useThemeStore";
 import toast from "react-hot-toast";
+import "../styles/workspace-chat-scroll.css";
 
 export default function ProjectChat({ onIdeationStateChange }) {
   const { id } = useParams();
@@ -153,95 +154,105 @@ export default function ProjectChat({ onIdeationStateChange }) {
   );
 
   return (
-    <div className={`flex h-full flex-col ${
-      isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"
-    }`}>
-
-      {/* Header */}
-      <div className={`flex items-center justify-between border-b px-6 py-4 ${
-        isDark
-          ? "bg-[#2a2a2a] border-white/10"
-          : "bg-white border-black/10"
-      }`}>
-        <h2 className="text-sm font-semibold">Project Chat</h2>
-        <p className={`text-xs ${isDark ? "text-[#888]" : "text-[#666]"}`}>
-          Live
-        </p>
-      </div>
-
-      {/* Messages */}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-y-auto px-6 py-8 space-y-6"
+    <div
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden font-sans ${
+        isDark ? "bg-[#1a1a18] text-[#ecebe8]" : "bg-[#faf9f5] text-[#1f1f1e]"
+      }`}
+    >
+      <header
+        className={`shrink-0 border-b ${
+          isDark ? "border-[#2f2f2c]" : "border-[#e8e6e0]"
+        }`}
       >
-        <AnimatePresence>
-          {messages.map((m, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2 }}
-              className={`flex ${
-                m.role === "user" ? "justify-end" : "justify-start"
-              }`}
-            >
-              <div
-                className={`max-w-[70%] rounded-xl px-5 py-4 ${
-                  m.role === "user"
-                    ? (isDark
-                        ? "bg-[#3a3a3a]"
-                        : "bg-black text-white")
-                    : (isDark
-                        ? "bg-[#2a2a2a] border border-white/10"
-                        : "bg-white border border-black/10")
-                }`}
+        <div className="mx-auto flex w-full max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+          <h2 className="text-sm font-medium tracking-tight">Ideation</h2>
+          <span className={`text-xs font-medium ${isDark ? "text-[#a3a29c]" : "text-[#6b6a67]"}`}>Live</span>
+        </div>
+      </header>
+
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          ref={scrollRef}
+          className="workspaceChatScroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+        >
+        <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6 sm:py-8">
+          <AnimatePresence>
+            {messages.map((m, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.18 }}
+                className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
               >
-                <div className={`mb-2 text-[11px] font-medium ${
-                  isDark ? "text-[#888]" : "text-[#666]"
-                }`}>
-                  {m.role === "user" ? "You" : "Assistant"}
-                </div>
+                {m.role === "user" ? (
+                  <div
+                    className={`max-w-[min(88%,28rem)] rounded-3xl px-4 py-3 text-[15px] leading-relaxed ${
+                      isDark ? "bg-[#3d3d3a] text-[#f5f4f0]" : "bg-[#ecece7] text-[#1f1f1e]"
+                    }`}
+                  >
+                    <p className={`mb-1.5 text-[11px] font-medium uppercase tracking-wide ${isDark ? "text-[#c4c3bd]" : "text-[#6b6a67]"}`}>
+                      You
+                    </p>
+                    <div className="whitespace-pre-wrap">{m.content}</div>
+                  </div>
+                ) : (
+                  <div className="w-full min-w-0 pr-2 sm:pr-4">
+                    <p className={`mb-1.5 text-[11px] font-medium uppercase tracking-wide ${isDark ? "text-[#a3a29c]" : "text-[#6b6a67]"}`}>
+                      Assistant
+                    </p>
+                    <div className={`text-[15px] leading-relaxed whitespace-pre-wrap ${isDark ? "text-[#ecebe8]" : "text-[#2b2b29]"}`}>
+                      {m.content}
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </AnimatePresence>
 
-                <div className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {m.content}
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {loading && (
-          <div className="flex justify-start">
-            <div className={`rounded-xl px-5 py-4 text-sm ${
-              isDark
-                ? "bg-[#2a2a2a] border border-white/10 text-[#888]"
-                : "bg-white border border-black/10 text-[#555]"
-            }`}>
-              Generating response...
+          {loading && (
+            <div className="flex justify-start">
+              <p className={`text-[15px] ${isDark ? "text-[#a3a29c]" : "text-[#6b6a67]"}`}>Thinking…</p>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      <div className="px-6 pb-3 flex justify-end">
-        <button
-          onClick={() => setShowMeta(prev => !prev)}
-          className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-            isDark
-              ? "border-white/10 bg-[#2a2a2a] hover:bg-[#333]"
-              : "border-black/10 bg-white hover:bg-[#f1f1f1]"
-          }`}
-        >
-          {showMeta ? "Hide Info" : "View Captured Info"}
-        </button>
+      <div
+        className={`shrink-0 border-t ${
+          isDark ? "border-[#2f2f2c] bg-[#1a1a18]" : "border-[#e8e6e0] bg-[#faf9f5]"
+        }`}
+      >
+        <div className="mx-auto flex w-full max-w-7xl justify-end px-4 pt-2 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setShowMeta((prev) => !prev)}
+            className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${
+              isDark ? "text-[#c4c3bd] hover:bg-white/5" : "text-[#5c5b56] hover:bg-black/[0.04]"
+            }`}
+          >
+            {showMeta ? "Hide captured info" : "Captured info"}
+          </button>
+        </div>
       </div>
 
       {showMeta && (
-        <div className="px-6 pb-4">
-          <div className="rounded-xl border border-white/10 bg-[#1f1f1f] px-4 py-4 text-[#e5e5e5]">
-            <div className="flex items-center justify-between gap-3">
+        <div
+          className={`workspaceChatScroll max-h-[min(42svh,22rem)] shrink-0 overflow-y-auto border-t ${
+            isDark ? "border-[#2f2f2c] bg-[#212120]" : "border-[#e8e6e0] bg-[#f3f2ed]"
+          }`}
+        >
+          <div className="mx-auto w-full max-w-7xl px-4 py-3 sm:px-6">
+            <div
+              className={`rounded-2xl border px-4 py-4 sm:px-5 ${
+                isDark
+                  ? "border-[#3d3d3a] bg-[#2a2a27] text-[#ecebe8]"
+                  : "border-[#dcdad3] bg-white text-[#1f1f1e] shadow-sm"
+              }`}
+            >
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-sm font-semibold">Ideation Summary</h3>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {[
                   ["overview", "Overview"],
                   ["hardware", "Hardware"],
@@ -250,10 +261,10 @@ export default function ProjectChat({ onIdeationStateChange }) {
                   <button
                     key={key}
                     onClick={() => setInsightView(key)}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                    className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${
                       insightView === key
-                        ? "bg-[#3a3a3a] text-[#f3f4f6]"
-                        : "bg-[#262626] text-[#9ca3af] hover:bg-[#333]"
+                        ? "bg-[#c96442] text-white"
+                        : (isDark ? "bg-[#2a2a27] text-[#c4c3bd] hover:bg-[#353532]" : "bg-[#ecece7] text-[#5c5b56] hover:bg-[#e0dfd8]")
                     }`}
                   >
                     {label}
@@ -265,41 +276,43 @@ export default function ProjectChat({ onIdeationStateChange }) {
             {insightView === "overview" && (
               <div className="mt-4 space-y-4 text-sm">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-white/10 bg-[#262626] px-3 py-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Readiness Score</p>
+                  <div className={`rounded-xl border px-3 py-3 ${isDark ? "border-white/[0.1] bg-[#0f1419]" : "border-black/[0.06] bg-slate-50"}`}>
+                    <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Readiness Score</p>
                     <div className="mt-2 flex items-center gap-3">
                       <div
                         className="h-12 w-12 rounded-full"
                         style={{
-                          background: `conic-gradient(#22c55e ${readinessScore * 3.6}deg, #3f3f46 0deg)`
+                          background: isDark
+                            ? `conic-gradient(#22c55e ${readinessScore * 3.6}deg, #334155 0deg)`
+                            : `conic-gradient(#16a34a ${readinessScore * 3.6}deg, #e2e8f0 0deg)`
                         }}
                       />
                       <div>
-                        <p className="text-lg font-semibold text-[#f3f4f6]">{readinessScore}%</p>
-                        <p className="text-xs text-[#9ca3af]">Ideation + profile confidence</p>
+                        <p className={`text-lg font-semibold ${isDark ? "text-slate-100" : "text-slate-900"}`}>{readinessScore}%</p>
+                        <p className={`text-xs ${isDark ? "text-slate-400" : "text-slate-500"}`}>Ideation + profile confidence</p>
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-white/10 bg-[#262626] px-3 py-3">
-                    <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Signal Bars</p>
+                  <div className={`rounded-xl border px-3 py-3 ${isDark ? "border-white/[0.1] bg-[#0f1419]" : "border-black/[0.06] bg-slate-50"}`}>
+                    <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Signal Bars</p>
                     <div className="mt-2 space-y-2 text-xs">
                       <div>
-                        <p className="mb-1 text-[#d1d5db]">Requirements ({requirementsCount})</p>
-                        <div className="h-2 rounded-full bg-[#3f3f46]">
-                          <div className="h-2 rounded-full bg-[#38bdf8]" style={{ width: `${Math.min(100, requirementsCount * 20)}%` }} />
+                        <p className={`mb-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Requirements ({requirementsCount})</p>
+                        <div className={`h-2 rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}>
+                          <div className="h-2 rounded-full bg-sky-500" style={{ width: `${Math.min(100, requirementsCount * 20)}%` }} />
                         </div>
                       </div>
                       <div>
-                        <p className="mb-1 text-[#d1d5db]">Detected Components ({componentsDetected})</p>
-                        <div className="h-2 rounded-full bg-[#3f3f46]">
-                          <div className="h-2 rounded-full bg-[#a78bfa]" style={{ width: `${Math.min(100, componentsDetected * 20)}%` }} />
+                        <p className={`mb-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Detected Components ({componentsDetected})</p>
+                        <div className={`h-2 rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}>
+                          <div className="h-2 rounded-full bg-violet-500" style={{ width: `${Math.min(100, componentsDetected * 20)}%` }} />
                         </div>
                       </div>
                       <div>
-                        <p className="mb-1 text-[#d1d5db]">Open Unknowns ({unknownsCount})</p>
-                        <div className="h-2 rounded-full bg-[#3f3f46]">
-                          <div className="h-2 rounded-full bg-[#f59e0b]" style={{ width: `${Math.min(100, unknownsCount * 25)}%` }} />
+                        <p className={`mb-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>Open Unknowns ({unknownsCount})</p>
+                        <div className={`h-2 rounded-full ${isDark ? "bg-slate-700" : "bg-slate-200"}`}>
+                          <div className="h-2 rounded-full bg-amber-500" style={{ width: `${Math.min(100, unknownsCount * 25)}%` }} />
                         </div>
                       </div>
                     </div>
@@ -311,8 +324,8 @@ export default function ProjectChat({ onIdeationStateChange }) {
             {insightView === "hardware" && (
               <div className="mt-4 space-y-4 text-sm">
                 <section>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Detected Hardware</p>
-                  <div className="mt-1 space-y-1 text-[#d1d5db]">
+                  <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Detected Hardware</p>
+                  <div className={`mt-1 space-y-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                     <p>Board: {projectMeta?.board || "Not detected yet"}</p>
                     <p>Power: {projectMeta?.powerSource || "Not detected yet"}</p>
                     <p>Language: {projectMeta?.language || "cpp"}</p>
@@ -321,8 +334,8 @@ export default function ProjectChat({ onIdeationStateChange }) {
                 </section>
 
                 <section>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Generation Profile</p>
-                  <div className="mt-1 space-y-1 text-[#d1d5db]">
+                  <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Generation Profile</p>
+                  <div className={`mt-1 space-y-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                     <p>Board Part: {generationProfile?.boardPartType || "Pending"}</p>
                     <p>Firmware Target: {generationProfile?.firmwareTarget || "Pending"}</p>
                     <p>Simulation Target: {generationProfile?.simulationTarget || "Pending"}</p>
@@ -335,10 +348,10 @@ export default function ProjectChat({ onIdeationStateChange }) {
             {insightView === "sim" && (
               <div className="mt-4 space-y-4 text-sm">
                 <section>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">AVR8JS Readiness</p>
-                  <div className="mt-2 rounded-lg border border-white/10 bg-[#262626] px-3 py-3 text-[#d1d5db]">
+                  <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>AVR8JS Readiness</p>
+                  <div className={`mt-2 rounded-xl border px-3 py-3 ${isDark ? "border-white/[0.1] bg-[#0f1419] text-slate-300" : "border-black/[0.06] bg-slate-50 text-slate-700"}`}>
                     <p>Need artifacts:</p>
-                    <ul className="mt-2 list-disc pl-5 text-xs space-y-1 text-[#cbd5e1]">
+                    <ul className={`mt-2 list-disc space-y-1 pl-5 text-xs ${isDark ? "text-slate-400" : "text-slate-600"}`}>
                       <li>Valid sketch.ino with setup() and loop()</li>
                       <li>Consistent board part in diagram.json</li>
                       <li>Pin mappings and non-empty connections</li>
@@ -347,8 +360,8 @@ export default function ProjectChat({ onIdeationStateChange }) {
                 </section>
 
                 <section>
-                  <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Status</p>
-                  <p className={`mt-1 ${ideationFinalized ? "text-[#22c55e]" : "text-[#facc15]"}`}>
+                  <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Status</p>
+                  <p className={`mt-1 ${ideationFinalized ? "text-emerald-500" : "text-amber-500"}`}>
                     {ideationFinalized ? "✓ Ready for Components" : "⏳ In Progress"}
                   </p>
                 </section>
@@ -357,40 +370,40 @@ export default function ProjectChat({ onIdeationStateChange }) {
 
             <div className="mt-4 space-y-4 text-sm">
               <section>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Project Idea</p>
-                <p className="mt-1 text-[#d1d5db]">
+                <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Project Idea</p>
+                <p className={`mt-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                   {ideaState?.summary?.trim() || "Not captured yet"}
                 </p>
               </section>
 
               <section>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Requirements</p>
+                <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Requirements</p>
                 {Array.isArray(ideaState?.requirements) && ideaState.requirements.length > 0 ? (
-                  <ul className="mt-1 list-disc pl-5 text-[#d1d5db] space-y-1">
+                  <ul className={`mt-1 list-disc space-y-1 pl-5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                     {ideaState.requirements.map((item, index) => (
                       <li key={`${item}-${index}`}>{item}</li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1 text-[#9ca3af]">None yet</p>
+                  <p className={`mt-1 ${isDark ? "text-slate-500" : "text-slate-500"}`}>None yet</p>
                 )}
               </section>
 
               <section>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Open Questions</p>
+                <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Open Questions</p>
                 {Array.isArray(ideaState?.unknowns) && ideaState.unknowns.length > 0 ? (
-                  <ul className="mt-1 list-disc pl-5 text-[#d1d5db] space-y-1">
+                  <ul className={`mt-1 list-disc space-y-1 pl-5 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                     {ideaState.unknowns.map((item, index) => (
                       <li key={`${item}-${index}`}>{item}</li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="mt-1 text-[#22c55e]">None - ideation complete ✓</p>
+                  <p className="mt-1 text-emerald-500">None - ideation complete ✓</p>
                 )}
               </section>
               <section>
-                <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Architecture Blueprint</p>
-                <div className="mt-1 space-y-1 text-[#d1d5db]">
+                <p className={`text-xs uppercase tracking-[0.18em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>Architecture Blueprint</p>
+                <div className={`mt-1 space-y-1 ${isDark ? "text-slate-300" : "text-slate-700"}`}>
                   <p>Pattern: {architectureState?.pattern || "Pending"}</p>
                   <p>Source Strategy: {architectureState?.sourceStrategy || "Pending"}</p>
                   <p>Entry File: {architectureState?.entryFile || "sketch.ino"}</p>
@@ -399,49 +412,53 @@ export default function ProjectChat({ onIdeationStateChange }) {
                   <p>Pin Assignments: {Array.isArray(architectureState?.pinAssignments) ? architectureState.pinAssignments.length : 0}</p>
                 </div>
                 {architectureState?.summary ? (
-                  <p className="mt-2 text-[#d1d5db]">{architectureState.summary}</p>
+                  <p className={`mt-2 ${isDark ? "text-slate-300" : "text-slate-700"}`}>{architectureState.summary}</p>
                 ) : null}
               </section>
             </div>
           </div>
         </div>
+        </div>
       )}
 
-      {/* Input */}
-      <div className={`border-t px-6 py-4 ${
-        isDark
-          ? "bg-[#2a2a2a] border-white/10"
-          : "bg-white border-black/10"
-      }`}>
-        <div className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${
-          isDark
-            ? "bg-[#1f1f1f] border-white/10"
-            : "bg-[#f0f0f0] border-black/10"
-        }`}>
-          <input
-            className={`flex-1 bg-transparent px-2 py-2 text-sm outline-none ${
-              isDark ? "placeholder:text-[#666]" : "placeholder:text-[#888]"
-            }`}
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && sendMessage()}
-            placeholder="Type your message..."
-          />
-
-          <button
-            onClick={sendMessage}
-            disabled={loading}
-            className={`rounded-lg px-5 py-2 text-sm font-semibold ${
-              isDark
-                ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]"
-                : "bg-black text-white hover:bg-[#222]"
-            }`}
-          >
-            Send
-          </button>
-        </div>
       </div>
 
+      <div
+        className={`z-10 shrink-0 border-t ${
+          isDark ? "border-[#2f2f2c] bg-[#1a1a18]" : "border-[#e8e6e0] bg-[#faf9f5]"
+        }`}
+      >
+        <div className="mx-auto w-full max-w-7xl px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6">
+          <div
+            className={`flex min-h-[52px] items-end gap-2 rounded-[1.75rem] border px-3 py-2 shadow-sm sm:gap-3 sm:px-4 ${
+              isDark
+                ? "border-[#3d3d3a] bg-[#2a2a27]"
+                : "border-[#dcdad3] bg-white"
+            }`}
+          >
+            <input
+              type="text"
+              className={`min-h-[44px] min-w-0 flex-1 resize-none bg-transparent px-2 py-2.5 text-[15px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-[#c96442]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+                isDark ? "text-[#ecebe8] placeholder:text-[#7a7974]" : "text-[#1f1f1e] placeholder:text-[#9c9b96]"
+              }`}
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && sendMessage()}
+              placeholder="Message…"
+              aria-label="Message"
+            />
+            <button
+              type="button"
+              onClick={sendMessage}
+              disabled={loading || !input.trim()}
+              className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c96442] text-sm font-semibold text-white shadow-sm transition hover:bg-[#b55738] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c96442] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+              aria-label="Send"
+            >
+              ↑
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -190,7 +190,7 @@ const minimalPushbuttonAttrs = (planAttrs) => {
   return out;
 };
 
-/** Wokwi docs: common, digits ("1"–"4"), colon ("" | "1"), optional color. */
+/** Wokwi diagram: commonPin "anode"|"cathode", digits "1"–"4", colon only when "1" (omit when off), optional color. */
 const sevenSegDigitsFromType = (compType) => {
   const m = String(compType || "").match(/^SEVEN_SEGMENT_([1-4])$/);
   return m ? m[1] : "1";
@@ -200,8 +200,8 @@ const minimalSevenSegmentAttrs = (def, comp) => {
   const defaults = defaultAttrsFor(def);
   const planA = comp?.attrs && typeof comp.attrs === "object" ? comp.attrs : {};
 
-  const rawCommon = planA.common ?? planA.commonPin ?? defaults.common;
-  const common = rawCommon === "cathode" || rawCommon === "anode" ? rawCommon : "anode";
+  const rawCommon = planA.commonPin ?? planA.common ?? defaults.commonPin ?? defaults.common;
+  const commonPin = rawCommon === "cathode" || rawCommon === "anode" ? rawCommon : "anode";
 
   let digits =
     planA.digits != null && String(planA.digits).trim() !== ""
@@ -210,19 +210,42 @@ const minimalSevenSegmentAttrs = (def, comp) => {
   if (!/^[1-4]$/.test(digits)) digits = sevenSegDigitsFromType(comp?.type);
 
   const c = planA.colon;
-  let colonOut = "";
-  if (c === true || String(c) === "1") colonOut = "1";
+  let colonOn = false;
+  if (c === true || String(c) === "1") colonOn = true;
   else {
     const d = defaults.colon;
-    if (d === true || String(d) === "1") colonOut = "1";
+    if (d === true || String(d) === "1") colonOn = true;
   }
 
   const colorVal =
     planA.color != null && String(planA.color).trim() !== "" ? planA.color : defaults.color;
 
-  const out = { common, digits, colon: colonOut };
+  const defaultOff = defaults.offColor != null ? String(defaults.offColor) : "#444";
+  const offColorVal =
+    planA.offColor != null && String(planA.offColor).trim() !== "" ? String(planA.offColor) : defaultOff;
+
+  const defaultBg = defaults.background != null ? String(defaults.background) : "black";
+  const backgroundVal =
+    planA.background != null && String(planA.background).trim() !== ""
+      ? String(planA.background)
+      : defaultBg;
+
+  const pinsLayoutRaw = planA.pins != null && String(planA.pins).trim() !== "" ? String(planA.pins).trim() : "top";
+  const pinsLayout = pinsLayoutRaw === "extend" || pinsLayoutRaw === "none" ? pinsLayoutRaw : "top";
+
+  const out = { commonPin, digits };
+  if (colonOn) out.colon = "1";
   if (colorVal != null && String(colorVal).trim() !== "") out.color = String(colorVal);
+  if (offColorVal !== "#444") out.offColor = offColorVal;
+  if (backgroundVal !== "black") out.background = backgroundVal;
+  if (pinsLayout !== "top") out.pins = pinsLayout;
   return out;
+};
+
+/** Wokwi diagram: omit board simulator defaults (led13, resetPressed, …); only explicit plan attrs. */
+const minimalBoardAttrs = (plan) => {
+  const planA = plan?.board?.attrs && typeof plan.board.attrs === "object" ? plan.board.attrs : {};
+  return { ...planA };
 };
 
 /** Wokwi wokwi-servo docs: only horn + hornColor; omit angle and other runtime/editor fields. */
@@ -250,6 +273,68 @@ const minimalServoAttrs = (def, comp) => {
   return { horn, hornColor };
 };
 
+/** Parallel: omit i2cAddress in diagram attrs; I2C: keep i2cAddress + pins. */
+const minimalLcdAttrs = (def, comp) => {
+  const defaults = defaultAttrsFor(def);
+  const planA = comp?.attrs && typeof comp.attrs === "object" ? comp.attrs : {};
+  const pinsRaw = planA.pins != null && String(planA.pins).trim() !== "" ? String(planA.pins).trim().toLowerCase() : String(defaults.pins ?? "full").toLowerCase();
+  const pins = pinsRaw === "i2c" ? "i2c" : pinsRaw === "none" ? "none" : "full";
+  const color =
+    planA.color != null && String(planA.color).trim() !== ""
+      ? String(planA.color)
+      : defaults.color != null
+        ? String(defaults.color)
+        : "black";
+  const background =
+    planA.background != null && String(planA.background).trim() !== ""
+      ? String(planA.background)
+      : defaults.background != null
+        ? String(defaults.background)
+        : "green";
+  const variant =
+    planA.variant != null && String(planA.variant).trim() !== ""
+      ? String(planA.variant)
+      : defaults.variant != null
+        ? String(defaults.variant)
+        : "";
+
+  const backlight =
+    planA.backlight === false || String(planA.backlight).toLowerCase() === "false"
+      ? false
+      : planA.backlight === true || String(planA.backlight).toLowerCase() === "true"
+        ? true
+        : defaults.backlight !== false;
+
+  const screenOnly =
+    planA.screenOnly === true || String(planA.screenOnly).toLowerCase() === "true";
+
+  if (pins === "i2c") {
+    const i2cAddress =
+      planA.i2cAddress != null && String(planA.i2cAddress).trim() !== ""
+        ? String(planA.i2cAddress)
+        : defaults.i2cAddress != null
+          ? String(defaults.i2cAddress)
+          : "0x27";
+    const out = { pins: "i2c", i2cAddress, color, background };
+    if (variant !== "") out.variant = variant;
+    if (backlight === false) out.backlight = false;
+    if (screenOnly) out.screenOnly = true;
+    return out;
+  }
+  if (pins === "none") {
+    const out = { pins: "none", color, background };
+    if (variant !== "") out.variant = variant;
+    if (backlight === false) out.backlight = false;
+    if (screenOnly) out.screenOnly = true;
+    return out;
+  }
+  const out = { pins: "full", color, background };
+  if (variant !== "") out.variant = variant;
+  if (backlight === false) out.backlight = false;
+  if (screenOnly) out.screenOnly = true;
+  return out;
+};
+
 const generateParts = (registry, plan) => {
   const items = Array.isArray(plan?.components) ? plan.components : [];
   const { cols, gapX, gapY, startX, startY } = computeLayout(items.length + 1);
@@ -267,10 +352,7 @@ const generateParts = (registry, plan) => {
     id: String(plan?.board?.id || "board"),
     top: Number.isFinite(plan?.board?.top) ? plan.board.top : 270,
     left: Number.isFinite(plan?.board?.left) ? plan.board.left : 185,
-    attrs: {
-      ...defaultAttrsFor(boardDef),
-      ...(plan?.board?.attrs && typeof plan.board.attrs === "object" ? plan.board.attrs : {})
-    }
+    attrs: minimalBoardAttrs(plan)
   });
 
   items.forEach((comp, idx) => {
@@ -283,16 +365,19 @@ const generateParts = (registry, plan) => {
     const isPushbutton = comp.type === "PUSHBUTTON" || comp.type === "PUSHBUTTON_6MM";
     const isSevenSeg = def.wokwiType === "wokwi-7segment";
     const isServo = def.wokwiType === "wokwi-servo";
+    const isLcd = def.wokwiType === "wokwi-lcd1602";
     const attrs = isPushbutton
       ? minimalPushbuttonAttrs(comp.attrs)
       : isSevenSeg
         ? minimalSevenSegmentAttrs(def, comp)
         : isServo
           ? minimalServoAttrs(def, comp)
-          : {
-              ...defaultAttrsFor(def),
-              ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
-            };
+          : isLcd
+            ? minimalLcdAttrs(def, comp)
+            : {
+                ...defaultAttrsFor(def),
+                ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
+              };
 
     parts.push({
       type: def.wokwiType,
@@ -313,6 +398,43 @@ const generateParts = (registry, plan) => {
 
 export { generateParts };
 
+/**
+ * Models often use type "board" for the MCU; the registry key is board.type (e.g. ARDUINO_UNO).
+ * Coerce any connection endpoint whose id matches plan.board.id to use plan.board.type.
+ * Arduino-style digital pins D12, D11, … are normalized to registry names "12", "11", ….
+ */
+const normalizeBoardEndpointsInConnections = (plan) => {
+  if (!plan || typeof plan !== "object") return plan;
+  const boardType = String(plan?.board?.type || "").trim();
+  const boardId = String(plan?.board?.id || "").trim();
+  if (!boardType || !boardId) return plan;
+
+  const fixEp = (ep) => {
+    if (!ep || typeof ep !== "object") return ep;
+    let next = ep;
+    if (String(ep.id || "").trim() === boardId && String(ep.type || "").trim() !== boardType) {
+      next = { ...next, type: boardType };
+    }
+    if (String(next.type || "").trim() === boardType && next.pin != null) {
+      const p = String(next.pin).trim();
+      const m = /^D(\d+)$/i.exec(p);
+      if (m) {
+        next = { ...next, pin: m[1] };
+      }
+    }
+    return next;
+  };
+
+  const wires = Array.isArray(plan?.connections) ? plan.connections : [];
+  const connections = wires.map((w) => ({
+    ...w,
+    from: fixEp(w?.from),
+    to: fixEp(w?.to)
+  }));
+
+  return { ...plan, connections };
+};
+
 const validatePinExists = (registry, compType, pinName) => {
   const def = registry[compType];
   if (!def) throw new Error(`Unknown component type: ${compType}`);
@@ -330,6 +452,8 @@ export const validatePlan = (registry, plan) => {
     add("plan must be an object");
     return { ok: false, errors };
   }
+
+  plan = normalizeBoardEndpointsInConnections(plan);
 
   if (!plan.board || typeof plan.board !== "object") {
     add("plan.board is required");
@@ -521,7 +645,8 @@ export const validatePlan = (registry, plan) => {
     }
 
     const attrs = seg?.attrs && typeof seg.attrs === "object" ? seg.attrs : {};
-    const colonOn = attrs.colon === true || String(attrs.colon) === "1";
+    const colonOn =
+      attrs.colon === true || String(attrs.colon) === "1" || String(attrs.colon).toLowerCase() === "true";
     const hasCln = hasAnyConnectionToPin("SEVEN_SEGMENT_4", segId, "CLN");
     if (colonOn && !hasCln) {
       add(`seven-seg policy: SEVEN_SEGMENT_4 "${segId}" colon=true requires CLN to be wired`);
@@ -598,6 +723,86 @@ export const validatePlan = (registry, plan) => {
     }
   }
 
+  const resistors = planComponents.filter((c) => c?.type === "RESISTOR");
+  for (const res of resistors) {
+    const resId = String(res?.id || "").trim();
+    if (!resId) continue;
+    for (const pin of ["1", "2"]) {
+      if (!hasAnyConnectionToPin("RESISTOR", resId, pin)) {
+        add(`resistor policy: RESISTOR "${resId}" must wire both terminals (pin ${pin} is missing a connection)`);
+      }
+    }
+  }
+
+  const lcd1602s = planComponents.filter((c) => c?.type === "LCD_1602");
+  const isParallelLcdPins = (attrs) => {
+    const p = String(attrs?.pins || "").trim().toLowerCase();
+    return p !== "i2c" && p !== "none";
+  };
+  const hasParallelLcd1602 = lcd1602s.some((lcd) => {
+    const a = lcd?.attrs && typeof lcd.attrs === "object" ? lcd.attrs : {};
+    return isParallelLcdPins(a);
+  });
+
+  for (const lcd of lcd1602s) {
+    const lcdId = String(lcd?.id || "").trim();
+    if (!lcdId) continue;
+    const attrs = lcd?.attrs && typeof lcd.attrs === "object" ? lcd.attrs : {};
+    if (!isParallelLcdPins(attrs)) continue;
+
+    if (!chipPowerWiredToBoard("LCD_1602", lcdId, "VSS", isBoardGndPin)) {
+      add(`lcd policy: LCD_1602 "${lcdId}" (parallel) must connect VSS to the board GND`);
+    }
+    if (!chipPowerWiredToBoard("LCD_1602", lcdId, "VDD", isBoard5VPin)) {
+      add(`lcd policy: LCD_1602 "${lcdId}" (parallel) must connect VDD to the board 5V rail`);
+    }
+    if (!hasAnyConnectionToPin("LCD_1602", lcdId, "V0")) {
+      add(
+        `lcd policy: LCD_1602 "${lcdId}" (parallel) must connect V0 (contrast — e.g. POTENTIOMETER SIG or a resistor to GND)`
+      );
+    }
+    if (!chipPowerWiredToBoard("LCD_1602", lcdId, "RW", isBoardGndPin)) {
+      add(`lcd policy: LCD_1602 "${lcdId}" (parallel) must connect RW to the board GND`);
+    }
+  }
+
+  const potentiometers = planComponents.filter((c) => c?.type === "POTENTIOMETER");
+  for (const pot of potentiometers) {
+    const potId = String(pot?.id || "").trim();
+    if (!potId) continue;
+    for (const pin of ["GND", "VCC", "SIG"]) {
+      if (!hasAnyConnectionToPin("POTENTIOMETER", potId, pin)) {
+        add(`potentiometer policy: POTENTIOMETER "${potId}" must have pin ${pin} connected`);
+      }
+    }
+  }
+
+  if (hasParallelLcd1602 && potentiometers.length > 0) {
+    const parallelLcdIds = lcd1602s
+      .filter((lcd) => {
+        const a = lcd?.attrs && typeof lcd.attrs === "object" ? lcd.attrs : {};
+        return isParallelLcdPins(a);
+      })
+      .map((lcd) => String(lcd?.id || "").trim())
+      .filter(Boolean);
+
+    for (const pot of potentiometers) {
+      const potId = String(pot?.id || "").trim();
+      if (!potId) continue;
+      const sigToLcdV0 = parallelLcdIds.some((lcdId) =>
+        hasConnection(
+          { type: "POTENTIOMETER", id: potId, pin: "SIG" },
+          { type: "LCD_1602", id: lcdId, pin: "V0" }
+        )
+      );
+      if (!sigToLcdV0) {
+        add(
+          `potentiometer policy: with parallel LCD_1602 present, POTENTIOMETER "${potId}" must connect SIG to an LCD_1602 V0 pin (contrast wiper); do not wire SIG only to a board analog pin`
+        );
+      }
+    }
+  }
+
   return { ok: errors.length === 0, errors };
 };
 
@@ -633,6 +838,9 @@ const boardPinToServoAttachArg = (pin) => {
   if (/^A\d+$/i.test(s)) return s.toUpperCase();
   return null;
 };
+
+/** Board pin name to C++ integer literal for `const int` / LiquidCrystal pins (same rules as Servo::attach). */
+const boardPinToCppIntExpr = (pin) => boardPinToServoAttachArg(pin);
 
 /** `servo_minutes` -> `servoMinutes` (valid C++ identifier; avoids collisions). */
 const servoIdToCppVarName = (id, usedNames) => {
@@ -848,6 +1056,126 @@ ${loopBody}
 `;
 };
 
+/**
+ * First parallel (`pins` full or default) LCD_1602 only: LiquidCrystal 4-bit demo with bidirectional window scroll.
+ * Returns null if any LCD is i2c, if no full-pinout LCD (`none` excluded), or if RS/E/D4–D7 are not all wired to the board.
+ */
+export const buildLcdSketchFromPlan = (plan, wireComments = "") => {
+  const boardId = String(plan?.board?.id || "").trim();
+  const boardType = String(plan?.board?.type || "").trim();
+  if (!boardId || !boardType) return null;
+
+  const components = Array.isArray(plan?.components) ? plan.components : [];
+  const lcds = components.filter((c) => c?.type === "LCD_1602");
+  if (lcds.length === 0) return null;
+
+  const anyI2c = lcds.some((c) => {
+    const a = c?.attrs && typeof c.attrs === "object" ? c.attrs : {};
+    return String(a.pins || "").trim().toLowerCase() === "i2c";
+  });
+  if (anyI2c) return null;
+
+  const target =
+    lcds.find((c) => {
+      const a = c?.attrs && typeof c.attrs === "object" ? c.attrs : {};
+      const p = String(a.pins || "").trim().toLowerCase();
+      return p !== "i2c" && p !== "none";
+    }) || null;
+  if (!target) return null;
+
+  const lcdId = String(target?.id || "").trim();
+  if (!lcdId) return null;
+
+  const wires = Array.isArray(plan?.connections) ? plan.connections : [];
+  const isBoardEndpoint = (ep) => ep?.id === boardId && ep?.type === boardType;
+
+  const getBoardPinConnectedTo = (componentId, componentType, componentPin) => {
+    for (const w of wires) {
+      const from = w?.from;
+      const to = w?.to;
+      if (!from || !to) continue;
+
+      const aIsTarget = from.id === componentId && from.type === componentType && from.pin === componentPin;
+      const bIsTarget = to.id === componentId && to.type === componentType && to.pin === componentPin;
+
+      if (aIsTarget && isBoardEndpoint(to)) return to.pin;
+      if (bIsTarget && isBoardEndpoint(from)) return from.pin;
+    }
+    return null;
+  };
+
+  const dataPins = ["RS", "E", "D4", "D5", "D6", "D7"];
+  const resolved = {};
+  for (const p of dataPins) {
+    const boardPin = getBoardPinConnectedTo(lcdId, "LCD_1602", p);
+    const expr = boardPin != null ? boardPinToCppIntExpr(boardPin) : null;
+    if (expr == null) return null;
+    resolved[p] = expr;
+  }
+
+  const planHeader = wireComments.trim()
+    ? `// Wiring plan:\n${wireComments.trim()}\n\n`
+    : "";
+
+  const multiNote =
+    lcds.length > 1
+      ? `// Note: multiple LCD_1602 in plan; sketch drives the first only ("${lcdId}").\n`
+      : "";
+
+  return `// Generated by NovaAI
+${planHeader}${multiNote}// LiquidCrystal 4-bit demo: bidirectional scroll on line 0 (250 ms steps).
+
+#include <string.h>
+#include <LiquidCrystal.h>
+
+const int LCD_RS = ${resolved.RS};
+const int LCD_EN = ${resolved.E};
+const int LCD_D4 = ${resolved.D4};
+const int LCD_D5 = ${resolved.D5};
+const int LCD_D6 = ${resolved.D6};
+const int LCD_D7 = ${resolved.D7};
+
+LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
+
+static const char SCROLL_MSG[] = "    NovaAI — bidirectional LCD scroll demo    ";
+
+void setup() {
+  lcd.begin(16, 2);
+  lcd.setCursor(0, 0);
+  lcd.print("LCD ready");
+  lcd.setCursor(0, 1);
+  lcd.print("${lcdId}");
+  delay(800);
+}
+
+void loop() {
+  static uint32_t lastMs;
+  static int start = 0;
+  static int delta = 1;
+  const uint32_t now = millis();
+  if (now - lastMs < 250) return;
+  lastMs = now;
+
+  const int L = (int)strlen(SCROLL_MSG);
+  const int WIN = 16;
+  lcd.setCursor(0, 0);
+  if (L <= WIN) {
+    for (int i = 0; i < WIN; i++) lcd.write((uint8_t)(i < L ? SCROLL_MSG[i] : ' '));
+    return;
+  }
+  for (int i = 0; i < WIN; i++) lcd.write((uint8_t)SCROLL_MSG[start + i]);
+  start += delta;
+  if (start <= 0) {
+    start = 0;
+    delta = 1;
+  } else if (start >= L - WIN) {
+    start = L - WIN;
+    delta = -1;
+  }
+}
+`;
+};
+
 const buildPlanPrompt = ({ project, userPrompt, registryContext, defaultBoardKey }) => {
   return `
 You are a strict hardware planning assistant.
@@ -858,7 +1186,9 @@ Do not output sketch.ino or diagram.json directly.
 
 Rules:
 - You can ONLY use component "type" values that exist in the REGISTRY CONTEXT list (use the "name" field as the type key).
+- In connections[], any endpoint wired to the microcontroller must use the SAME "type" string as board.type (e.g. ARDUINO_UNO), with the SAME "id" as board.id. Never use type "board" as a placeholder.
 - Pins must be chosen from that component's pin list.
+- Microcontroller digital pins in connections[] must use registry pin names from the board definition (numeric strings like "12", "13", not Arduino-IDE-style "D12", "D13").
 - If the user asks for a board, pick it if it exists in the registry. Otherwise choose a reasonable default.
 - If the prompt is ambiguous, make safe defaults and write a note in notes[].
 - ARCHITECTURE STATE is the execution contract from ideation/components. Prefer its pattern, files, libraries, and pinAssignments unless the user explicitly overrides them.
@@ -879,12 +1209,15 @@ Component rules (must follow):
   - A4988_DRIVER:VDD -> board 5V / 5V.1 / 5V.2
   - A4988_DRIVER:GND -> board GND.1 / GND.2 / GND.3 / etc.
 - Connect A4988_DRIVER:RESET to A4988_DRIVER:SLEEP (no board pin required).
-- SEVEN_SEGMENT_4 (Wokwi wokwi-7segment): attrs use registry shape — common "anode"|"cathode", digits "4", colon "" or boolean/string clock mode; diagram attrs follow Wokwi (string digits, colon "" or "1").
+- SEVEN_SEGMENT_4 (Wokwi wokwi-7segment): plan attrs use commonPin "anode"|"cathode" (legacy common is accepted); digits "4"; colon true or "1" only when clock colon is on (omit colon when off — do not use empty string). Diagram export uses Wokwi field commonPin (not common).
   - Wire ALL of: DIG1,DIG2,DIG3,DIG4 and segments A,B,C,D,E,F,G and COM. Pin COM (not COM.1 for this type). COM MUST appear in connections[] (board GND or 5V per common cathode/anode in COMPONENTS STATE / USER REQUEST).
-  - If attrs.colon is true or "1" (clock/colon on), you MUST wire pin CLN on that display to the board. If colon is false/omitted/"", do NOT wire CLN.
+  - If attrs.colon is true or "1" (clock/colon on), you MUST wire pin CLN on that display to the board. If colon is false/omitted, do NOT wire CLN.
+- RESISTOR: each resistor MUST connect both pin "1" and pin "2" to something (board, net, or part pin).
 - DS1307: each DS1307 MUST have pin GND wired to a board GND pin and pin 5V wired to a board 5V rail (5V, 5V.1, 5V.2, etc.).
 - PUSHBUTTON and PUSHBUTTON_6MM: each button MUST have at least two different button pins each wired to the board (typically one to a digital/analog input and one to GND for INPUT_PULLUP sketches).
 - SERVO (Wokwi wokwi-servo): optional attrs only horn ("single"|"double"|"cross") and hornColor (CSS color). Do not put angle or other simulator/runtime fields in attrs; motion is sketch-driven.
+- LCD_1602 (Wokwi wokwi-lcd1602): attrs.pins "full" for parallel wiring. Parallel mode MUST: VSS to board GND; VDD to board 5V; V0 wired (contrast — POTENTIOMETER SIG or resistor/divider); RW to board GND; typical data: RS, E, D4–D7. Recommended backlight: lcd pin A to 5V, K to GND. attrs.pins "i2c" uses GND, VCC, SDA, SCL. Optional attrs: i2cAddress, color, background, variant.
+- POTENTIOMETER: wire GND, VCC, and SIG. If a parallel LCD_1602 is also in the plan, wire pot SIG to lcd:V0 for contrast (not only to a board analog pin like A0).
 
 REGISTRY CONTEXT (compressed):
 ${JSON.stringify(registryContext)}
@@ -929,7 +1262,7 @@ ${userPrompt || ""}
 const normalizeParsedPlan = (plan, defaultBoardKey) => {
   const boardType = plan?.board?.type || defaultBoardKey;
   const boardId = String(plan?.board?.id || "board");
-  return {
+  return normalizeBoardEndpointsInConnections({
     ...plan,
     board: {
       type: boardType,
@@ -941,7 +1274,7 @@ const normalizeParsedPlan = (plan, defaultBoardKey) => {
     components: Array.isArray(plan?.components) ? plan.components : [],
     connections: Array.isArray(plan?.connections) ? plan.connections : [],
     notes: Array.isArray(plan?.notes) ? plan.notes.map((n) => String(n)) : []
-  };
+  });
 };
 
 const buildRepairPlanPrompt = ({
@@ -966,7 +1299,11 @@ ${JSON.stringify(failedPlan)}
 Rules (unchanged):
 - Return ONLY valid JSON. No markdown. No prose. No trailing commas. NO COMMENTS.
 - Pins must exist on the component in REGISTRY CONTEXT.
-- SEVEN_SEGMENT_4: wire DIG1-DIG4, A-G, COM; if attrs.colon true or "1" also wire CLN; if colon off do not wire CLN. DS1307: GND+5V to board. Pushbuttons: two board connections per button. SERVO: attrs only horn + hornColor; no angle.
+- Board endpoints in connections[] must use board.type (registry controller key), not the literal string "board".
+- Board digital pins: use registry names ("12", not "D12").
+- SEVEN_SEGMENT_4: wire DIG1-DIG4, A-G, COM; if attrs.colon true or "1" also wire CLN; if colon off do not wire CLN. Use commonPin anode|cathode. RESISTOR: wire both pins 1 and 2. DS1307: GND+5V to board. Pushbuttons: two board connections per button. SERVO: attrs only horn + hornColor; no angle.
+- LCD_1602: parallel ("full") vs I2C ("i2c"); parallel needs VSS+GND, VDD+5V, V0+contrast, RW+GND; recommend A+5V and K+GND for backlight.
+- POTENTIOMETER: GND, VCC, SIG. With parallel LCD: SIG must connect to lcd:V0.
 
 REGISTRY CONTEXT (compressed):
 ${JSON.stringify(registryContext)}
@@ -1173,10 +1510,12 @@ ${loopDirFlip ? `\n${loopDirFlip}\n` : ""}
   })();
 
   const servoSketch = buildServoSketchFromPlan(normalizedPlan, wireComments);
+  const lcdSketch = buildLcdSketchFromPlan(normalizedPlan, wireComments);
 
   const sketchIno =
     a4988Sketch
     || servoSketch
+    || lcdSketch
     || `// Generated by NovaAI
 // This is a minimal scaffold. Add behavior based on your wiring plan.
 ${wireComments ? `\n// Wiring plan:\n${wireComments}\n` : ""}

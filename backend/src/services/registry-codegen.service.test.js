@@ -6,7 +6,8 @@ import {
   validatePlan,
   generateArtifactsFromRegistry,
   generateParts,
-  buildServoSketchFromPlan
+  buildServoSketchFromPlan,
+  buildLcdSketchFromPlan
 } from "./registry-codegen.service.js";
 
 test("validatePlan: rejects invalid pin for a variant", () => {
@@ -76,6 +77,250 @@ test("validatePlan: rejects type mismatch for a reused id", () => {
   assert.ok(result.errors.some((e) => e.includes("type mismatch")));
 });
 
+test("validatePlan: accepts type \"board\" on MCU endpoints (coerced to board.type)", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "RESISTOR", id: "r1", attrs: {} }],
+    connections: [
+      { from: { type: "RESISTOR", id: "r1", pin: "1" }, to: { type: "board", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "RESISTOR", id: "r1", pin: "2" }, to: { type: "board", id: "board", pin: "GND.1" }, color: "black", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validatePlan: accepts LCD_1602 with legal wires", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "RESISTOR", id: "rV0", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "V0" }, to: { type: "RESISTOR", id: "rV0", pin: "1" }, color: "green", route: [] },
+      { from: { type: "RESISTOR", id: "rV0", pin: "2" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.3" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "12" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validatePlan: normalizes D12 to 12 on board endpoints", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "RESISTOR", id: "rV0", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "V0" }, to: { type: "RESISTOR", id: "rV0", pin: "1" }, color: "green", route: [] },
+      { from: { type: "RESISTOR", id: "rV0", pin: "2" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.3" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "D12" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validatePlan: rejects parallel LCD_1602 without RW to board GND", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "RESISTOR", id: "rV0", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "V0" }, to: { type: "RESISTOR", id: "rV0", pin: "1" }, color: "green", route: [] },
+      { from: { type: "RESISTOR", id: "rV0", pin: "2" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "12" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("lcd policy") && e.includes("RW")));
+});
+
+test("validatePlan: rejects parallel LCD_1602 without V0 connection", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } }],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "12" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("lcd policy") && e.includes("V0")));
+});
+
+test("validatePlan: rejects POTENTIOMETER with parallel LCD when SIG is not wired to lcd V0", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "RESISTOR", id: "rV0", attrs: {} },
+      { type: "POTENTIOMETER", id: "pot1", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "V0" }, to: { type: "RESISTOR", id: "rV0", pin: "1" }, color: "green", route: [] },
+      { from: { type: "RESISTOR", id: "rV0", pin: "2" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.3" }, color: "black", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "GND" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "VCC" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "SIG" }, to: { type: "ARDUINO_UNO", id: "board", pin: "A0" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("potentiometer policy") && e.includes("V0")));
+});
+
+test("validatePlan: accepts POTENTIOMETER with parallel LCD when SIG wires to lcd V0", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "POTENTIOMETER", id: "pot1", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "SIG" }, to: { type: "LCD_1602", id: "lcd1", pin: "V0" }, color: "green", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "GND" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "VCC" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.errors, []);
+});
+
+test("validatePlan: rejects POTENTIOMETER with only SIG wired", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "POTENTIOMETER", id: "pot1", attrs: {} }],
+    connections: [
+      { from: { type: "POTENTIOMETER", id: "pot1", pin: "SIG" }, to: { type: "ARDUINO_UNO", id: "board", pin: "A0" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("potentiometer policy") && e.includes("GND")));
+});
+
+test("buildLcdSketchFromPlan: emits LiquidCrystal sketch when RS/E/D4–D7 wired", () => {
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } },
+      { type: "RESISTOR", id: "rV0", attrs: {} }
+    ],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VSS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "VDD" }, to: { type: "ARDUINO_UNO", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.2" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "V0" }, to: { type: "RESISTOR", id: "rV0", pin: "1" }, color: "green", route: [] },
+      { from: { type: "RESISTOR", id: "rV0", pin: "2" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.3" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "12" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "E" }, to: { type: "ARDUINO_UNO", id: "board", pin: "11" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D4" }, to: { type: "ARDUINO_UNO", id: "board", pin: "10" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D5" }, to: { type: "ARDUINO_UNO", id: "board", pin: "9" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D6" }, to: { type: "ARDUINO_UNO", id: "board", pin: "8" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D7" }, to: { type: "ARDUINO_UNO", id: "board", pin: "7" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  const sketch = buildLcdSketchFromPlan(plan, "");
+  assert.ok(sketch);
+  assert.ok(sketch.includes("#include <LiquidCrystal.h>"));
+  assert.ok(sketch.includes("lcd.begin(16, 2)"));
+  assert.ok(sketch.includes("LiquidCrystal lcd("));
+});
+
+test("buildLcdSketchFromPlan: returns null when D4 not wired or LCD is i2c", () => {
+  const base = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "LCD_1602", id: "lcd1", attrs: { pins: "full" } }],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RS" }, to: { type: "ARDUINO_UNO", id: "board", pin: "12" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "E" }, to: { type: "ARDUINO_UNO", id: "board", pin: "11" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D5" }, to: { type: "ARDUINO_UNO", id: "board", pin: "9" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D6" }, to: { type: "ARDUINO_UNO", id: "board", pin: "8" }, color: "green", route: [] },
+      { from: { type: "LCD_1602", id: "lcd1", pin: "D7" }, to: { type: "ARDUINO_UNO", id: "board", pin: "7" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+  assert.equal(buildLcdSketchFromPlan(base, ""), null);
+
+  const i2cPlan = {
+    ...base,
+    components: [{ type: "LCD_1602", id: "lcd1", attrs: { pins: "i2c" } }]
+  };
+  assert.equal(buildLcdSketchFromPlan(i2cPlan, ""), null);
+
+  const nonePlan = {
+    ...base,
+    components: [{ type: "LCD_1602", id: "lcd1", attrs: { pins: "none" } }]
+  };
+  assert.equal(buildLcdSketchFromPlan(nonePlan, ""), null);
+});
+
+test("generateParts: parallel LCD_1602 omits i2cAddress from attrs", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "LCD_1602", id: "lcd1", attrs: { pins: "full", i2cAddress: "0x27" } }],
+    connections: [
+      { from: { type: "LCD_1602", id: "lcd1", pin: "RW" }, to: { type: "ARDUINO_UNO", id: "board", pin: "GND.1" }, color: "black", route: [] }
+    ],
+    notes: []
+  };
+  const lcdPart = generateParts(registry, plan).find((p) => p.id === "lcd1");
+  assert.ok(lcdPart);
+  assert.equal(lcdPart.attrs.pins, "full");
+  assert.equal("i2cAddress" in lcdPart.attrs, false);
+});
+
 test("stepper motor registry: pins and attrs match expected Wokwi contract", () => {
   const registry = getRegistry();
   const stepper = registry.STEPPER_MOTOR;
@@ -87,6 +332,8 @@ test("stepper motor registry: pins and attrs match expected Wokwi contract", () 
   const pinNames = (stepper.pins || []).map((p) => p.name);
   assert.deepEqual(pinNames, ["A-", "A+", "B+", "B-"]);
 
+  assert.equal(stepper.attrs.value.default, "");
+  assert.equal(stepper.attrs.units.default, "");
   assert.equal(stepper.attrs.display.default, "steps");
   assert.equal(stepper.attrs.gearRatio.default, "1:1");
   assert.equal(stepper.attrs.size.default, "23");
@@ -409,6 +656,74 @@ test("validatePlan: rejects invalid pin on SEVEN_SEGMENT_4", () => {
   const result = validatePlan(registry, plan);
   assert.equal(result.ok, false);
   assert.ok(result.errors.some((e) => e.includes('Invalid pin "NOT_A_PIN"')));
+});
+
+test("validatePlan: rejects RESISTOR when only one pin is wired", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "RESISTOR", id: "r1", attrs: {} }],
+    connections: [
+      { from: { type: "RESISTOR", id: "r1", pin: "1" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5V" }, color: "red", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('resistor policy') && e.includes("pin 2")));
+});
+
+test("validatePlan: accepts RESISTOR with both pins wired", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "RESISTOR", id: "r1", attrs: {} }],
+    connections: [
+      { from: { type: "RESISTOR", id: "r1", pin: "1" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5V" }, color: "red", route: [] },
+      { from: { type: "RESISTOR", id: "r1", pin: "2" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" }, color: "black", route: [] }
+    ],
+    notes: []
+  };
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+});
+
+test("generateParts: board omits default simulator attrs; 7-seg uses commonPin and omits colon when off", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      {
+        type: "SEVEN_SEGMENT_4",
+        id: "display",
+        top: 100,
+        left: 100,
+        attrs: { common: "cathode", colon: false, color: "red" }
+      }
+    ]
+  };
+  const parts = generateParts(registry, plan);
+  const boardPart = parts.find((p) => p.id === "board");
+  assert.deepEqual(boardPart.attrs, {});
+  const seg = parts.find((p) => p.id === "display");
+  assert.equal(seg.attrs.commonPin, "cathode");
+  assert.ok(!Object.prototype.hasOwnProperty.call(seg.attrs, "common"));
+  assert.ok(!Object.prototype.hasOwnProperty.call(seg.attrs, "colon"));
+  assert.equal(seg.attrs.digits, "4");
+  assert.equal(seg.attrs.color, "red");
+});
+
+test("generateParts: 7-seg colon on emits colon \"1\"", () => {
+  const registry = getRegistry();
+  const plan = {
+    board: { type: "ARDUINO_UNO", id: "board", top: 270, left: 185, attrs: {} },
+    components: [
+      { type: "SEVEN_SEGMENT_4", id: "d1", top: 0, left: 0, attrs: { colon: true, commonPin: "anode" } }
+    ]
+  };
+  const seg = generateParts(registry, plan).find((p) => p.id === "d1");
+  assert.equal(seg.attrs.colon, "1");
+  assert.equal(seg.attrs.commonPin, "anode");
 });
 
 test("validatePlan: rejects DS1307 without power to board", () => {

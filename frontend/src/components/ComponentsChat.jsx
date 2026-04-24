@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "../store/useThemeStore";
 import toast from "react-hot-toast";
 import useVoiceGuidance from "../hooks/useVoiceGuidance";
+import "../styles/workspace-chat-scroll.css";
 
 export default function ComponentsChat() {
   const { id } = useParams();
@@ -37,6 +38,7 @@ export default function ComponentsChat() {
     status: voiceStatus,
     diagnostics: voiceDiagnostics,
     speakText,
+    stopSpeaking,
     startListening,
     stopListening,
     pauseForTyping,
@@ -152,14 +154,14 @@ export default function ComponentsChat() {
         { withCredentials: true }
       );
 
+      void speakText(res.data.reply);
       setMessages(prev => [...prev, { role: "ai", content: res.data.reply }]);
       setGenerationProfile(res.data?.generationProfile || {});
-      speakText(res.data.reply);
     } catch (err) {
       const errorMessage = err?.response?.data?.error || "Components chat failed";
       toast.error(errorMessage);
+      void speakText(errorMessage);
       setMessages(prev => [...prev, { role: "ai", content: errorMessage }]);
-      speakText(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -339,14 +341,22 @@ export default function ComponentsChat() {
       : { label: "Weak", color: "text-[#ef4444]" };
 
   return (
-    <div className={`flex h-full flex-col ${isDark ? "bg-[#0f1720] text-[#e2e8f0]" : "bg-[#f2efe9] text-[#1f2937]"}`}>
-      <div className={`border-b px-6 py-5 ${isDark ? "border-[#233246] bg-[#111b2b]" : "border-[#d6cdbf] bg-[#f7f3ec]"}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
+    <div
+      className={`flex min-h-0 flex-1 flex-col overflow-hidden font-sans ${
+        isDark ? "bg-[#1a1a18] text-[#ecebe8]" : "bg-[#faf9f5] text-[#1f1f1e]"
+      }`}
+    >
+      <div
+        className={`shrink-0 border-b ${
+          isDark ? "border-[#2f2f2c] bg-[#212120]" : "border-[#e8e6e0] bg-[#f3f2ed]"
+        }`}
+      >
+        <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:px-5 sm:py-3.5">
           <div>
             <p className={`text-[11px] font-semibold uppercase tracking-[0.25em] ${isDark ? "text-[#93c5fd]" : "text-[#0f766e]"}`}>Build Stage</p>
             <h2 className="mt-1 text-lg font-semibold">Components Control Deck</h2>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end">
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDark ? "bg-[#172235] text-[#7dd3fc]" : "bg-[#d1fae5] text-[#0f766e]"}`}>Readiness {profileReadiness}%</span>
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadge.color} ${isDark ? "bg-[#1a2333]" : "bg-[#e7e5e4]"}`}>{statusBadge.label}</span>
 
@@ -386,6 +396,16 @@ export default function ComponentsChat() {
             >
               {voiceStatus === "listening" || voiceStatus === "duplex" ? "Stop Mic" : "Start Mic"}
             </button>
+
+            {(voiceStatus === "speaking" || voiceStatus === "duplex") && (
+              <button
+                type="button"
+                onClick={() => stopSpeaking()}
+                className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${isDark ? "border-rose-500/40 bg-rose-950/40 text-rose-200 hover:bg-rose-950/60" : "border-rose-200 bg-rose-50 text-rose-900 hover:bg-rose-100"}`}
+              >
+                Stop voice
+              </button>
+            )}
           </div>
         </div>
 
@@ -417,8 +437,12 @@ export default function ComponentsChat() {
         </p>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <aside className={`min-h-0 overflow-y-auto border-r px-4 py-4 ${isDark ? "border-[#223247] bg-[#111a28]" : "border-[#d6cdbf] bg-[#f9f6f1]"}`}>
+      <div className="grid min-h-0 min-w-0 flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[minmax(220px,15rem)_minmax(0,1fr)]">
+        <aside
+          className={`workspaceChatScroll min-h-0 overflow-y-auto border-b px-3 py-3 lg:border-b-0 lg:border-r ${
+            isDark ? "border-[#2f2f2c] bg-[#212120]" : "border-[#e8e6e0] bg-[#f3f2ed]"
+          }`}
+        >
           <div className="space-y-3">
             <button
               onClick={() => generateFiles()}
@@ -481,10 +505,13 @@ export default function ComponentsChat() {
           )}
         </aside>
 
-        <main className="min-h-0 overflow-hidden">
-          <div className="grid h-full min-h-0 grid-rows-[1fr_auto_auto]">
-            <div ref={scrollRef} className="overflow-y-auto px-5 py-5">
-              <div className="space-y-4">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div
+              ref={scrollRef}
+              className="workspaceChatScroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain"
+            >
+              <div className="mx-auto w-full max-w-7xl space-y-4 px-4 py-4 sm:px-6 sm:py-5">
                 <AnimatePresence>
                   {messages.map((m, i) => (
                     <motion.div
@@ -494,30 +521,46 @@ export default function ComponentsChat() {
                       transition={{ duration: 0.2 }}
                       className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
                     >
-                      <div className={`max-w-[85%] rounded-2xl px-4 py-3 ${m.role === "user"
-                        ? (isDark ? "bg-[#1d4ed8] text-white" : "bg-[#0f766e] text-white")
-                        : (isDark ? "border border-[#304764] bg-[#142338]" : "border border-[#d4c9b8] bg-white")}`}
-                      >
-                        <p className={`mb-1 text-[11px] font-semibold uppercase tracking-[0.15em] ${m.role === "user" ? "text-white/80" : (isDark ? "text-[#7dd3fc]" : "text-[#0f766e]")}`}>
-                          {m.role === "user" ? "Prompt" : "Builder"}
-                        </p>
-                        <div className="whitespace-pre-wrap text-sm leading-relaxed">{m.content}</div>
-                      </div>
+                      {m.role === "user" ? (
+                        <div
+                          className={`max-w-[min(88%,28rem)] rounded-3xl px-4 py-3 text-[15px] leading-relaxed ${
+                            isDark ? "bg-[#3d3d3a] text-[#f5f4f0]" : "bg-[#ecece7] text-[#1f1f1e]"
+                          }`}
+                        >
+                          <p className={`mb-1 text-[11px] font-medium uppercase tracking-wide ${isDark ? "text-[#c4c3bd]" : "text-[#6b6a67]"}`}>
+                            You
+                          </p>
+                          <div className="whitespace-pre-wrap">{m.content}</div>
+                        </div>
+                      ) : (
+                        <div className="w-full min-w-0 pr-1">
+                          <p className={`mb-1 text-[11px] font-medium uppercase tracking-wide ${isDark ? "text-[#a3a29c]" : "text-[#6b6a67]"}`}>
+                            Builder
+                          </p>
+                          <div className={`whitespace-pre-wrap text-[15px] leading-relaxed ${isDark ? "text-[#ecebe8]" : "text-[#2b2b29]"}`}>
+                            {m.content}
+                          </div>
+                        </div>
+                      )}
                     </motion.div>
                   ))}
                 </AnimatePresence>
 
                 {(loading || isGeneratingFiles) && (
                   <div className="flex justify-start">
-                    <div className={`rounded-2xl px-4 py-3 text-sm ${isDark ? "border border-[#304764] bg-[#142338] text-[#93c5fd]" : "border border-[#d4c9b8] bg-white text-[#0f766e]"}`}>
-                      {isGeneratingFiles ? "Generating project artifacts..." : "Thinking through architecture..."}
-                    </div>
+                    <p className={`text-[15px] ${isDark ? "text-[#a3a29c]" : "text-[#6b6a67]"}`}>
+                      {isGeneratingFiles ? "Generating project artifacts…" : "Thinking…"}
+                    </p>
                   </div>
                 )}
               </div>
             </div>
 
-            <div className={`border-t px-5 py-3 ${isDark ? "border-[#223247] bg-[#111a28]" : "border-[#d6cdbf] bg-[#f9f6f1]"}`}>
+            <div
+              className={`shrink-0 border-t px-4 py-2.5 sm:px-5 ${
+                isDark ? "border-[#2f2f2c] bg-[#1a1a18]" : "border-[#e8e6e0] bg-[#faf9f5]"
+              }`}
+            >
               <div className="flex flex-wrap items-center gap-2">
                 {[
                   "Give me board + pin mapping",
@@ -527,7 +570,7 @@ export default function ComponentsChat() {
                   <button
                     key={quick}
                     onClick={() => handleInputChange(quick)}
-                    className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${isDark ? "bg-[#18283d] text-[#7dd3fc] hover:bg-[#223754]" : "bg-white text-[#0f766e] hover:bg-[#f1ece2]"}`}
+                    className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${isDark ? "bg-[#2a2a27] text-[#ecebe8] hover:bg-[#353532]" : "bg-[#ecece7] text-[#1f1f1e] hover:bg-[#e0dfd8]"}`}
                   >
                     {quick}
                   </button>
@@ -535,29 +578,51 @@ export default function ComponentsChat() {
               </div>
             </div>
 
-            <div className={`border-t px-5 py-4 ${isDark ? "border-[#223247] bg-[#101929]" : "border-[#d6cdbf] bg-[#f7f3ec]"}`}>
-              <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(0,1fr)_420px]">
-                <div className={`rounded-2xl border px-3 py-2 ${isDark ? "border-[#304764] bg-[#132033]" : "border-[#d4c9b8] bg-white"}`}>
-                  <div className="flex items-center gap-2">
+            <div
+              className={`z-10 shrink-0 border-t ${
+                isDark ? "border-[#2f2f2c] bg-[#1a1a18]" : "border-[#e8e6e0] bg-[#faf9f5]"
+              }`}
+            >
+              <div className="mx-auto flex w-full max-w-7xl flex-col gap-3 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:px-6 xl:flex-row xl:items-stretch">
+                <div
+                  className={`min-w-0 flex-1 rounded-[1.75rem] border px-3 py-2 shadow-sm sm:px-4 ${
+                    isDark ? "border-[#3d3d3a] bg-[#2a2a27]" : "border-[#dcdad3] bg-white"
+                  }`}
+                >
+                  <div className="flex min-w-0 items-end gap-2">
                     <input
-                      className={`w-full bg-transparent px-2 py-2 text-sm outline-none ${isDark ? "placeholder:text-[#6b8bb3]" : "placeholder:text-[#9b8f7d]"}`}
+                      type="text"
+                      className={`min-h-[44px] min-w-0 flex-1 bg-transparent px-2 py-2 text-[15px] leading-snug outline-none focus-visible:ring-2 focus-visible:ring-[#c96442]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent ${
+                        isDark ? "text-[#ecebe8] placeholder:text-[#7a7974]" : "text-[#1f1f1e] placeholder:text-[#9c9b96]"
+                      }`}
                       value={input}
                       onChange={(e) => handleInputChange(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder={voiceEnabled ? "Type to pause voice, or speak using mic controls..." : "Ask for wiring logic, output behavior, or constraints..."}
+                      placeholder={
+                        voiceEnabled
+                          ? "Message (typing pauses voice)…"
+                          : "Wiring, constraints, serial behavior…"
+                      }
+                      aria-label="Message"
                     />
                     <button
+                      type="button"
                       onClick={sendMessage}
-                      disabled={loading || isGeneratingFiles}
-                      className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${isDark ? "bg-[#1d4ed8] text-white hover:bg-[#2563eb]" : "bg-[#0f766e] text-white hover:bg-[#0d9488]"} ${(loading || isGeneratingFiles) ? "cursor-not-allowed opacity-60" : ""}`}
+                      disabled={loading || isGeneratingFiles || !input.trim()}
+                      className="mb-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#c96442] text-sm font-semibold text-white shadow-sm transition hover:bg-[#b55738] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c96442] focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label="Send"
                     >
-                      Send
+                      ↑
                     </button>
                   </div>
                 </div>
 
-                <div className={`rounded-2xl border ${isDark ? "border-[#304764] bg-[#132033]" : "border-[#d4c9b8] bg-white"}`}>
-                  <div className={`flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 ${isDark ? "border-[#223247]" : "border-[#e4dbce]"}`}>
+                <div
+                  className={`min-w-0 flex-1 overflow-hidden rounded-2xl border shadow-sm xl:max-w-md ${
+                    isDark ? "border-[#3d3d3a] bg-[#2a2a27]" : "border-[#dcdad3] bg-white"
+                  }`}
+                >
+                  <div className={`flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 ${isDark ? "border-white/[0.08]" : "border-[#e4dbce]"}`}>
                     <div className="flex items-center gap-2">
                       {[
                         ["notes", "Notes"],
@@ -607,7 +672,13 @@ export default function ComponentsChat() {
                   </div>
 
                   {artifactPanelMode !== "minimized" && (
-                    <div className={`${artifactPanelMode === "maximized" ? "max-h-96" : "max-h-44"} overflow-y-auto px-3 py-2 text-xs`}>
+                    <div
+                      className={`workspaceChatScroll overflow-y-auto px-3 py-2 font-mono text-xs ${
+                        artifactPanelMode === "maximized"
+                          ? "max-h-[min(50svh,20rem)] min-h-[10rem] sm:max-h-[min(55svh,24rem)]"
+                          : "max-h-[min(32svh,14rem)] min-h-[8rem]"
+                      }`}
+                    >
                       {activeArtifactTab === "notes" && (
                         latestGenerated.notes.length > 0 ? (
                           <ul className="space-y-1">
@@ -623,13 +694,13 @@ export default function ComponentsChat() {
                       )}
 
                       {activeArtifactTab === "sketch" && (
-                        <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
+                        <pre className="scrollbar-hide overflow-x-auto whitespace-pre-wrap text-[12px] leading-relaxed">
                           {latestGenerated.sketch || "No sketch generated yet."}
                         </pre>
                       )}
 
                       {activeArtifactTab === "diagram" && (
-                        <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
+                        <pre className="scrollbar-hide overflow-x-auto whitespace-pre-wrap text-[12px] leading-relaxed">
                           {latestGenerated.diagram || "No diagram generated yet."}
                         </pre>
                       )}

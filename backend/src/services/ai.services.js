@@ -1981,6 +1981,7 @@ RULES:
 - Treat WOKWI RUNNER EVIDENCE as hard evidence from real simulations/tests.
 - If evidence indicates runtime/lint failure, mention the top failure and prioritize fixes before new feature steps.
 - If serial evidence includes errors, include one verification step that proves the fix in simulator output.
+- When LIVE WOKWI CIRCUIT CONTEXT includes simulatorSources with multiple file paths/snippets, treat the firmware as a multi-module project (.ino + .cpp/.h). Align advice with those paths; do not assume everything lives in a single sketch.ino.
 
 OUTPUT STRICT JSON:
 {

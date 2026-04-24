@@ -630,7 +630,7 @@ export default function WokwiSimulator({
   };
 
   return (
-    <div className={`flex h-full flex-col overflow-hidden ${isDark ? 'bg-[#151515] text-[#e5e5e5]' : 'bg-[#fafafa] text-[#111]'}`}>
+    <div className={`flex h-full min-h-0 flex-col overflow-hidden font-sans ${isDark ? "bg-[#0b0f14] text-[#e8eef4]" : "bg-[#f8fafc] text-[#12161c]"}`}>
       <div className={`border-b px-4 py-3 ${isDark ? 'border-white/10 bg-gradient-to-r from-[#151515] to-[#1d1d1d]' : 'border-black/10 bg-gradient-to-r from-white to-[#f3f4f6]'}`}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -686,7 +686,7 @@ export default function WokwiSimulator({
           onPointerMove={handleBoardPointerMove}
           onPointerUp={handleBoardPointerUp}
           onPointerLeave={handleBoardPointerUp}
-          className={`flex-1 min-w-0 rounded-2xl border overflow-auto shadow-lg ${isDark ? 'border-white/10 bg-[#0f172a]' : 'border-black/10 bg-white'}`}
+          className={`scrollbar-hide flex-1 min-w-0 overflow-auto rounded-2xl border shadow-lg ${isDark ? "border-white/[0.1] bg-[#0f1727]" : "border-black/[0.06] bg-white"}`}
         >
           {positionedParts.length ? (
             <svg
@@ -767,7 +767,7 @@ export default function WokwiSimulator({
             </p>
           </div>
           <div
-            className={`flex-1 min-h-0 overflow-y-auto font-mono text-xs p-3 ${isDark ? 'text-green-300' : 'text-[#333]'}`}
+            className={`scrollbar-hide flex-1 min-h-0 overflow-y-auto p-3 font-mono text-xs ${isDark ? "text-emerald-300" : "text-slate-800"}`}
             style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
           >
             {serialOutput || (isDark ? '$ waiting...' : '# waiting...')}
