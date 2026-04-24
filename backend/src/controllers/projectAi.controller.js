@@ -150,7 +150,7 @@ const buildHistoryText = (project) => {
 
 const buildProjectAIPrompt = ({ project, userInput, context, historyText, mode }) => {
   return `
-You are ProjectAI for the HardCode extension.
+You are ProjectAI for the NovaAI extension.
 
 Purpose:
 - Inspect the selected hardware repository and the project record.

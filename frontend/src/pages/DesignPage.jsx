@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import toast from "react-hot-toast";
 import { useThemeStore } from "../store/useThemeStore";
+import { useAuthStore } from "../store/useAuthStore";
 import DesignChat from "../components/DesignChat";
 import WokwiSimulator from "../components/WokwiSimulator";
 import useVoiceGuidance from "../hooks/useVoiceGuidance";
@@ -13,8 +14,8 @@ const getInitialProject = (locationState) => {
   return locationState?.projectSnapshot || null;
 };
 
-const getDraftStorageKey = (projectId) => `hardcode:design:draft:${projectId}`;
-const getVoiceStorageKey = (projectId) => `hardcode:design:voice:${projectId}`;
+const getDraftStorageKey = (projectId) => `NovaAI:design:draft:${projectId}`;
+const getVoiceStorageKey = (projectId) => `NovaAI:design:voice:${projectId}`;
 
 const SIM_TEST_CASES = [
   {
@@ -33,7 +34,7 @@ void loop() {
 `,
     diagramJson: {
       version: 1,
-      author: "HardCode",
+      author: "NovaAI",
       editor: "wokwi",
       parts: [
         { id: "uno", type: "wokwi-arduino-uno", x: 80, y: 120 },
@@ -83,7 +84,7 @@ void loop() {
 `,
     diagramJson: {
       version: 1,
-      author: "HardCode",
+      author: "NovaAI",
       editor: "wokwi",
       parts: [
         { id: "uno", type: "wokwi-arduino-uno", x: 70, y: 120 },
@@ -127,7 +128,7 @@ void loop() {
 `,
     diagramJson: {
       version: 1,
-      author: "HardCode",
+      author: "NovaAI",
       editor: "wokwi",
       parts: [
         { id: "uno", type: "wokwi-arduino-uno", x: 70, y: 130 },
@@ -176,6 +177,8 @@ export default function DesignPage() {
   const [compileLoading, setCompileLoading] = useState(false);
   const [selectedTestCaseId, setSelectedTestCaseId] = useState(SIM_TEST_CASES[0].id);
   const [compiledSketchCode, setCompiledSketchCode] = useState("");
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const logout = useAuthStore((state) => state.logout);
 
   const designState = project?.designState || {};
   const ideaState = project?.ideaState || {};
@@ -706,6 +709,18 @@ export default function DesignPage() {
     }
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      navigate("/auth");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className={`h-screen overflow-hidden ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
       <div className="mx-auto flex h-full w-full max-w-screen-2xl flex-col gap-3 px-4 py-4 lg:px-5">
@@ -776,6 +791,18 @@ export default function DesignPage() {
               className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? 'border-white/10 hover:bg-white/10' : 'border-black/10 hover:bg-black/5'}`}
             >
               {isDark ? "Light" : "Dark"}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`border px-4 py-2 text-xs font-semibold transition ${
+                isDark
+                  ? 'border-white/10 text-red-300 hover:bg-white/10'
+                  : 'border-black/10 text-red-600 hover:bg-black/5'
+              } ${isLoggingOut ? 'cursor-not-allowed opacity-60' : ''}`}
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
             </button>
           </div>
         </div>

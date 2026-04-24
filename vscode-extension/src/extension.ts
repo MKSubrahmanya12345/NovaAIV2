@@ -2,7 +2,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
-import { HardcodeWorkspaceViewProvider } from './workspace-panel';
+import { NovaAIWorkspaceViewProvider } from './workspace-panel';
 
 type WokwiTemplate = 'arduino-uno' | 'esp32-devkit-v1' | 'raspberry-pi-pico';
 
@@ -25,62 +25,62 @@ const DEFAULT_TEMPLATE: WokwiTemplate = 'arduino-uno';
 const WOKWI_BASE_URL = 'https://wokwi.com/projects/new';
 
 export function activate(context: vscode.ExtensionContext) {
-	const workspaceProvider = new HardcodeWorkspaceViewProvider(context);
+	const workspaceProvider = new NovaAIWorkspaceViewProvider(context);
 	const provider = new WokwiProjectsViewProvider(context);
-	const simulatorPanel = new HardcodeSimulatorPanel(context);
+	const simulatorPanel = new NovaAISimulatorPanel(context);
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider('hardcode.chatsView', workspaceProvider)
+		vscode.window.registerWebviewViewProvider('NovaAI.chatsView', workspaceProvider)
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode-vscode-extension.openChat', async () => {
-			await vscode.commands.executeCommand('hardcode.chatsView.focus');
+		vscode.commands.registerCommand('NovaAI-vscode-extension.openChat', async () => {
+			await vscode.commands.executeCommand('NovaAI.chatsView.focus');
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode.openChat', async () => {
-			await vscode.commands.executeCommand('hardcode.chatsView.focus');
+		vscode.commands.registerCommand('NovaAI.openChat', async () => {
+			await vscode.commands.executeCommand('NovaAI.chatsView.focus');
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode.openWorkspace', async () => {
-			await vscode.commands.executeCommand('hardcode.chatsView.focus');
+		vscode.commands.registerCommand('NovaAI.openWorkspace', async () => {
+			await vscode.commands.executeCommand('NovaAI.chatsView.focus');
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode-vscode-extension.createWokwiProject', async () => {
+		vscode.commands.registerCommand('NovaAI-vscode-extension.createWokwiProject', async () => {
 			await provider.promptAndCreateProject();
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode.createWokwiProject', async () => {
+		vscode.commands.registerCommand('NovaAI.createWokwiProject', async () => {
 			await provider.promptAndCreateProject();
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode.openSimulatorWorkbench', async () => {
+		vscode.commands.registerCommand('NovaAI.openSimulatorWorkbench', async () => {
 			await simulatorPanel.open();
 		})
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand('hardcode.selectSimulationPath', async () => {
+		vscode.commands.registerCommand('NovaAI.selectSimulationPath', async () => {
 			await simulatorPanel.selectPath();
 		})
 	);
 
 	void simulatorPanel.ensureInitialPathPrompt();
 
-	vscode.window.showInformationMessage('HardCode Chat + Wokwi extension activated.');
+	vscode.window.showInformationMessage('NovaAI Chat + Wokwi extension activated.');
 }
 
-class HardcodeSimulatorPanel {
+class NovaAISimulatorPanel {
 	private panel?: vscode.WebviewPanel;
 
 	constructor(private readonly context: vscode.ExtensionContext) {}
@@ -92,7 +92,7 @@ class HardcodeSimulatorPanel {
 		}
 
 		const action = await vscode.window.showInformationMessage(
-			'HardCode: Select simulation folder to scan diagram.json and wokwi.ini/toml files.',
+			'NovaAI: Select simulation folder to scan diagram.json and wokwi.ini/toml files.',
 			'Select Path',
 			'Later'
 		);
@@ -115,8 +115,8 @@ class HardcodeSimulatorPanel {
 		}
 
 		const fsPath = picked[0].fsPath;
-		await this.context.workspaceState.update('hardcode.simulationPath', fsPath);
-		vscode.window.showInformationMessage(`HardCode simulation path set: ${fsPath}`);
+		await this.context.workspaceState.update('NovaAI.simulationPath', fsPath);
+		vscode.window.showInformationMessage(`NovaAI simulation path set: ${fsPath}`);
 
 		if (this.panel) {
 			await this.postScanResult();
@@ -131,8 +131,8 @@ class HardcodeSimulatorPanel {
 		}
 
 		this.panel = vscode.window.createWebviewPanel(
-			'hardcode.simulatorWorkbench',
-			'HardCode Simulator Workbench',
+			'NovaAI.simulatorWorkbench',
+			'NovaAI Simulator Workbench',
 			vscode.ViewColumn.One,
 			{ enableScripts: true }
 		);
@@ -169,7 +169,7 @@ class HardcodeSimulatorPanel {
 	}
 
 	private getSavedPath(): string | undefined {
-		return this.context.workspaceState.get<string>('hardcode.simulationPath');
+		return this.context.workspaceState.get<string>('NovaAI.simulationPath');
 	}
 
 	private async postScanResult(): Promise<void> {
@@ -304,7 +304,7 @@ class HardcodeSimulatorPanel {
 	private async playSimulation(): Promise<void> {
 		const rootPath = this.getSavedPath();
 		if (!rootPath) {
-			vscode.window.showErrorMessage('HardCode: select a simulation path first.');
+			vscode.window.showErrorMessage('NovaAI: select a simulation path first.');
 			return;
 		}
 
@@ -338,10 +338,10 @@ class HardcodeSimulatorPanel {
 
 			// Start Wokwi simulator with the selected folder
 			await vscode.commands.executeCommand('wokwi-vscode.start');
-			vscode.window.showInformationMessage('HardCode: loaded project from ' + rootPath + ' and started Wokwi simulation.');
+			vscode.window.showInformationMessage('NovaAI: loaded project from ' + rootPath + ' and started Wokwi simulation.');
 		} catch (error) {
 			const message = error instanceof Error ? error.message : 'Unable to start simulation.';
-			vscode.window.showErrorMessage(`HardCode: ${message}`);
+			vscode.window.showErrorMessage(`NovaAI: ${message}`);
 		}
 	}
 
@@ -351,7 +351,7 @@ class HardcodeSimulatorPanel {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HardCode Simulator Workbench</title>
+  <title>NovaAI Simulator Workbench</title>
   <style>
     * {
       box-sizing: border-box;
@@ -540,7 +540,7 @@ class HardcodeSimulatorPanel {
 </head>
 <body>
   <div class="header">
-    <h1>HardCode Simulator Workbench</h1>
+    <h1>NovaAI Simulator Workbench</h1>
     <div class="controls">
       <button id="pickPath">Select Path</button>
       <button id="scan" class="primary">Scan Files</button>
@@ -845,12 +845,12 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private getWebAppUrl(): string {
-		const configured = vscode.workspace.getConfiguration('hardcode').get<string>('webAppUrl');
+		const configured = vscode.workspace.getConfiguration('NovaAI').get<string>('webAppUrl');
 		return configured && configured.trim() ? configured : 'http://localhost:5173';
 	}
 
 	private getBackendUrl(): string {
-		const configured = vscode.workspace.getConfiguration('hardcode').get<string>('backendUrl');
+		const configured = vscode.workspace.getConfiguration('NovaAI').get<string>('backendUrl');
 		return configured && configured.trim() ? configured : 'http://localhost:5000';
 	}
 
@@ -867,7 +867,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 	}
 
 	private async getProjectsRoot(): Promise<string> {
-		const configured = vscode.workspace.getConfiguration('hardcode').get<string>('wokwiProjectsPath');
+		const configured = vscode.workspace.getConfiguration('NovaAI').get<string>('wokwiProjectsPath');
 		if (configured && configured.trim()) {
 			await fs.mkdir(configured, { recursive: true });
 			return configured;
@@ -918,7 +918,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 			fs.writeFile(path.join(projectPath, 'sketch.ino'), sketch, 'utf8'),
 			fs.writeFile(path.join(projectPath, 'diagram.json'), JSON.stringify(diagram, null, 2), 'utf8'),
 			fs.writeFile(path.join(projectPath, 'libraries.txt'), '', 'utf8'),
-			fs.writeFile(path.join(projectPath, '.hardcode-wokwi.json'), JSON.stringify(meta, null, 2), 'utf8')
+			fs.writeFile(path.join(projectPath, '.NovaAI-wokwi.json'), JSON.stringify(meta, null, 2), 'utf8')
 		]);
 
 		return meta;
@@ -930,7 +930,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 				sketch: `// ${projectName}\nvoid setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  Serial.println("Hello from ESP32");\n  delay(1000);\n}\n`,
 				diagram: {
 					version: 1,
-					author: 'hardcode-vscode-extension',
+					author: 'NovaAI-vscode-extension',
 					editor: 'wokwi',
 					parts: [{ type: 'board-esp32-devkit-v1', id: 'esp', top: 0, left: 0, attrs: {} }],
 					connections: [],
@@ -944,7 +944,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 				sketch: `// ${projectName}\nvoid setup() {\n  Serial1.begin(115200);\n}\n\nvoid loop() {\n  Serial1.println("Hello from Pico");\n  delay(1000);\n}\n`,
 				diagram: {
 					version: 1,
-					author: 'hardcode-vscode-extension',
+					author: 'NovaAI-vscode-extension',
 					editor: 'wokwi',
 					parts: [{ type: 'board-pi-pico', id: 'pico', top: 0, left: 0, attrs: {} }],
 					connections: [],
@@ -957,7 +957,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 			sketch: `// ${projectName}\nconst int LED_PIN = 13;\n\nvoid setup() {\n  pinMode(LED_PIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_PIN, HIGH);\n  delay(500);\n  digitalWrite(LED_PIN, LOW);\n  delay(500);\n}\n`,
 			diagram: {
 				version: 1,
-				author: 'hardcode-vscode-extension',
+				author: 'NovaAI-vscode-extension',
 				editor: 'wokwi',
 				parts: [{ type: 'wokwi-arduino-uno', id: 'uno', top: 0, left: 0, attrs: {} }],
 				connections: [],
@@ -984,7 +984,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 				continue;
 			}
 
-			const metadataPath = path.join(fullPath, '.hardcode-wokwi.json');
+			const metadataPath = path.join(fullPath, '.NovaAI-wokwi.json');
 			let metadata: Partial<WokwiProjectInfo> = {};
 
 			if (await this.exists(metadataPath)) {
@@ -1034,7 +1034,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 <head>
 	<meta charset="UTF-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<title>HardCode Chat + Wokwi</title>
+	<title>NovaAI Chat + Wokwi</title>
 	<style>
 		:root {
 			color-scheme: dark;
@@ -1203,7 +1203,7 @@ class WokwiProjectsViewProvider implements vscode.WebviewViewProvider {
 	</style>
 </head>
 <body>
-	<h1>HardCode Sidebar Copilot</h1>
+	<h1>NovaAI Sidebar Copilot</h1>
 
 	<div class="panel">
 		<div class="row">

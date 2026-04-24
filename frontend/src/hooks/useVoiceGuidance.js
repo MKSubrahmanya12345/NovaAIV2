@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { axiosInstance } from "../lib/axios.js";
 
 const MAX_CHUNK_BYTES = 8 * 1024 * 1024;
-const DEFAULT_AUTO_SEND_DELAY_MS = 3000;
+const DEFAULT_AUTO_SEND_DELAY_MS = 1000;
 const HOLD_ONE_DELAY_MS = 10000;
 const HOLD_ONE_PATTERN = /\bhold one\b/i;
 
@@ -14,6 +14,11 @@ const hasMediaRecorder = () => {
 const hasAudioPlayback = () => {
   if (typeof window === "undefined") return false;
   return typeof window.Audio !== "undefined";
+};
+
+const hasSpeechSynthesis = () => {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.speechSynthesis) && typeof window.SpeechSynthesisUtterance !== "undefined";
 };
 
 const blobToBase64 = (blob) => {
@@ -168,6 +173,7 @@ export default function useVoiceGuidance({
   const onInterimTranscriptRef = useRef(onInterimTranscript);
   const onErrorRef = useRef(onError);
   const lastChunkErrorAtRef = useRef(0);
+  const fallbackTtsTokenRef = useRef(0);
 
   const patchDiagnostics = useCallback((partial) => {
     setDiagnostics((prev) => {
@@ -245,11 +251,22 @@ export default function useVoiceGuidance({
   }, [onError]);
 
   const isSpeechSupported = useMemo(() => hasAudioPlayback(), []);
+  const isNativeSpeechSupported = useMemo(() => hasSpeechSynthesis(), []);
   const isRecognitionSupported = useMemo(() => hasMediaRecorder(), []);
   const isVoiceSupported = isSpeechSupported || isRecognitionSupported;
 
   const stopSpeaking = useCallback(() => {
     ttsTokenRef.current += 1;
+    fallbackTtsTokenRef.current += 1;
+
+    if (isNativeSpeechSupported) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // Ignore fallback cancel errors during cleanup.
+      }
+    }
+
     const current = ttsRef.current;
 
     if (current.audio) {
@@ -266,7 +283,38 @@ export default function useVoiceGuidance({
 
     ttsRef.current = { audio: null, url: "" };
     setIsSpeaking(false);
-  }, []);
+  }, [isNativeSpeechSupported]);
+
+  const speakWithBrowserFallback = useCallback((text) => {
+    if (!isNativeSpeechSupported) {
+      return false;
+    }
+
+    const token = fallbackTtsTokenRef.current + 1;
+    fallbackTtsTokenRef.current = token;
+
+    try {
+      const utterance = new window.SpeechSynthesisUtterance(String(text || ""));
+      utterance.rate = Number.isFinite(rate) ? Math.min(1.2, Math.max(0.7, rate)) : 0.9;
+      utterance.lang = language || "en-US";
+
+      utterance.onend = () => {
+        if (token !== fallbackTtsTokenRef.current) return;
+        setIsSpeaking(false);
+      };
+
+      utterance.onerror = () => {
+        if (token !== fallbackTtsTokenRef.current) return;
+        setIsSpeaking(false);
+      };
+
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [isNativeSpeechSupported, language, rate]);
 
   const releaseStream = useCallback(() => {
     const stream = mediaStreamRef.current;
@@ -554,18 +602,29 @@ export default function useVoiceGuidance({
       await audio.play();
     } catch (event) {
       const details = extractErrorDetails(event);
-      setIsSpeaking(false);
       patchDiagnostics({
         lastTtsStatus: details.status,
         lastError: details.message
       });
+
+      const usedFallback = speakWithBrowserFallback(nextText);
+      if (usedFallback) {
+        onErrorRef.current?.({
+          code: "tts_fallback",
+          recoverable: true,
+          message: "Cloud voice unavailable. Using browser voice fallback."
+        });
+        return;
+      }
+
+      setIsSpeaking(false);
       onErrorRef.current?.({
         code: "tts_failed",
         recoverable: true,
         message: details.message || "Speech synthesis failed"
       });
     }
-  }, [isSpeechSupported, language, patchDiagnostics, rate, stopSpeaking]);
+  }, [isSpeechSupported, language, patchDiagnostics, rate, speakWithBrowserFallback, stopSpeaking]);
 
   useEffect(() => {
     if (!enabled) {

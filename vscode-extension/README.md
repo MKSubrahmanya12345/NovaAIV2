@@ -1,11 +1,11 @@
-# HardCode VS Code Extension
+# NovaAI VS Code Extension
 
-VS Code extension for the HardCode project workflow, enabling seamless integration with the HardCode webapp, chat interfaces, and Wokwi hardware simulation platform.
+VS Code extension for the NovaAI project workflow, enabling seamless integration with the NovaAI webapp, chat interfaces, and Wokwi hardware simulation platform.
 
 ## Features
 
 - Integrated chat interface for project ideation, component design, and system design workflows
-- Direct connectivity to HardCode backend services
+- Direct connectivity to NovaAI backend services
 - Wokwi simulator integration for hardware prototyping
 - Project management and tracking from within VS Code
 
@@ -13,20 +13,20 @@ VS Code extension for the HardCode project workflow, enabling seamless integrati
 
 - VS Code 1.116.0 or higher
 - Node.js for development
-- HardCode backend running locally or remotely
+- NovaAI backend running locally or remotely
 
 ## Extension Settings
 
-Configure HardCode extension behavior through these settings:
+Configure NovaAI extension behavior through these settings:
 
-* `hardcode.backendUrl`: Base URL for the HardCode backend API (default: `http://localhost:5000/api`)
-* `hardcode.webAppUrl`: URL of the HardCode web application (default: `http://localhost:5173`)
+* `NovaAI.backendUrl`: Base URL for the NovaAI backend API (default: `http://localhost:5000/api`)
+* `NovaAI.webAppUrl`: URL of the NovaAI web application (default: `http://localhost:5173`)
 
 ## Release Notes
 
 ### 0.0.1
 
-Initial release of HardCode VS Code extension scaffold.
+Initial release of NovaAI VS Code extension scaffold.
 
 ---
 

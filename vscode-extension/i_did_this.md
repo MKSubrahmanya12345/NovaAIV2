@@ -1,8 +1,8 @@
-# HardCode Simulator Workbench v0.0.4 - Licensed Wokwi Integration
+# NovaAI Simulator Workbench v0.0.4 - Licensed Wokwi Integration
 
 ## What Was Built
 
-**Embedded Wokwi Project Loader** - A complete VS Code extension workbench that loads local Wokwi projects (diagram.json + sketch files) directly into HardCode, with full project inspection and tight integration with the **licensed Wokwi VS Code extension** (not free tier wokwi.com).
+**Embedded Wokwi Project Loader** - A complete VS Code extension workbench that loads local Wokwi projects (diagram.json + sketch files) directly into NovaAI, with full project inspection and tight integration with the **licensed Wokwi VS Code extension** (not free tier wokwi.com).
 
 ### Core Features Implemented
 
@@ -69,7 +69,7 @@ Now uses the licensed Wokwi extension:
 private async playSimulation(): Promise<void> {
   const rootPath = this.getSavedPath();
   if (!rootPath) {
-    vscode.window.showErrorMessage('HardCode: select a simulation path first.');
+    vscode.window.showErrorMessage('NovaAI: select a simulation path first.');
     return;
   }
 
@@ -96,17 +96,17 @@ private async playSimulation(): Promise<void> {
 
     // Start Wokwi simulator with selected folder
     await vscode.commands.executeCommand('wokwi-vscode.start');
-    vscode.window.showInformationMessage('HardCode: loaded project from ' + rootPath + ' and started Wokwi simulation.');
+    vscode.window.showInformationMessage('NovaAI: loaded project from ' + rootPath + ' and started Wokwi simulation.');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to start simulation.';
-    vscode.window.showErrorMessage(`HardCode: ${message}`);
+    vscode.window.showErrorMessage(`NovaAI: ${message}`);
   }
 }
 ```
 
 **Key Points:**
 - Calls `wokwi-vscode.selectConfigFile` with the actual config file path from selected folder
-- Displays project metadata in HardCode UI simultaneously
+- Displays project metadata in NovaAI UI simultaneously
 - Launches `wokwi-vscode.start` which uses YOUR licensed extension key (not free tier)
 
 #### `loadProjectData()` (Existing Method)
@@ -189,7 +189,7 @@ document.getElementById('runSim').addEventListener('click', () => {
 | **File Sync** | Manual uploads | Direct local folder |
 | **Privacy** | Cloud storage | Local files only |
 
-**Result:** HardCode now uses your licensed Wokwi extension exclusively, avoiding free tier limitations.
+**Result:** NovaAI now uses your licensed Wokwi extension exclusively, avoiding free tier limitations.
 
 ---
 
@@ -199,7 +199,7 @@ document.getElementById('runSim').addEventListener('click', () => {
 - TypeScript strict mode: PASS
 - ESLint rules: PASS
 - esbuild bundling: PASS (extension.js 30.67 KB)
-- VSIX packaging: PASS (hardcode-0.0.4.vsix 15.64 KB)
+- VSIX packaging: PASS (NovaAI-0.0.4.vsix 15.64 KB)
 
 ✅ **Integration**
 - File scanning: Works with any Wokwi project folder
@@ -219,16 +219,16 @@ document.getElementById('runSim').addEventListener('click', () => {
 
 ### Prerequisites
 - Wokwi VS Code extension **with valid license** installed
-- HardCode extension (hardcode-0.0.4.vsix)
+- NovaAI extension (NovaAI-0.0.4.vsix)
 
-### Install HardCode
-1. Download: `C:/Users/User/Desktop/HardCode/vscode-extension/hardcode-0.0.4.vsix`
+### Install NovaAI
+1. Download: `C:/Users/User/Desktop/NovaAI/vscode-extension/NovaAI-0.0.4.vsix`
 2. VS Code → Extensions (Ctrl+Shift+X) → `...` → Install from VSIX
-3. Or: `code --install-extension hardcode-0.0.4.vsix`
+3. Or: `code --install-extension NovaAI-0.0.4.vsix`
 
 ### First Run
 1. **Verify Wokwi Extension:** Ensure Wokwi VS Code extension is installed and licensed
-2. **Open Simulator:** Command Palette (Ctrl+Shift+P) → "HardCode: Open Simulator Workbench"
+2. **Open Simulator:** Command Palette (Ctrl+Shift+P) → "NovaAI: Open Simulator Workbench"
 3. **Select Project Folder:** Click "Select Path" → choose folder with diagram.json
 4. **Scan Files:** Click "Scan Files" to discover project structure
 5. **View Project:** Click "▶ Load & Simulate" or see files in scan results
@@ -310,11 +310,11 @@ Load all data into UI
 **Version**: 0.0.4  
 **License Integration**: ✅ Using Licensed Wokwi VS Code Extension  
 **Date**: April 18, 2026
-# HardCode Simulator Workbench v0.0.3 - Tight Wokwi Integration
+# NovaAI Simulator Workbench v0.0.3 - Tight Wokwi Integration
 
 ## What Was Built
 
-**Embedded Wokwi Project Loader** - A complete VS Code extension workbench that loads local Wokwi projects (diagram.json + sketch files) directly into HardCode, with full project inspection and Wokwi export capabilities.
+**Embedded Wokwi Project Loader** - A complete VS Code extension workbench that loads local Wokwi projects (diagram.json + sketch files) directly into NovaAI, with full project inspection and Wokwi export capabilities.
 
 ### Core Features Implemented
 
@@ -410,7 +410,7 @@ private async loadProjectData(rootPath: string): Promise<any> {
 private async playSimulation(): Promise<void> {
   const rootPath = this.getSavedPath();
   if (!rootPath) {
-    vscode.window.showErrorMessage('HardCode: select a simulation path first.');
+    vscode.window.showErrorMessage('NovaAI: select a simulation path first.');
     return;
   }
 
@@ -425,10 +425,10 @@ private async playSimulation(): Promise<void> {
     }
 
     await vscode.commands.executeCommand('wokwi-vscode.start');
-    vscode.window.showInformationMessage('HardCode: loaded project and started Wokwi simulation.');
+    vscode.window.showInformationMessage('NovaAI: loaded project and started Wokwi simulation.');
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to start simulation.';
-    vscode.window.showErrorMessage(`HardCode: ${message}`);
+    vscode.window.showErrorMessage(`NovaAI: ${message}`);
   }
 }
 ```
@@ -522,7 +522,7 @@ document.getElementById('exportWokwi').addEventListener('click', () => {
 - TypeScript strict mode: PASS
 - ESLint rules: PASS
 - esbuild bundling: PASS (extension.js 31.16 KB)
-- VSIX packaging: PASS (hardcode-0.0.3.vsix 11.74 KB)
+- VSIX packaging: PASS (NovaAI-0.0.3.vsix 11.74 KB)
 
 ✅ **File System Operations**
 - Recursive folder scanning implemented
@@ -547,12 +547,12 @@ document.getElementById('exportWokwi').addEventListener('click', () => {
 ## Installation & Usage
 
 ### Install
-1. Download: `C:/Users/User/Desktop/HardCode/vscode-extension/hardcode-0.0.3.vsix`
+1. Download: `C:/Users/User/Desktop/NovaAI/vscode-extension/NovaAI-0.0.3.vsix`
 2. VS Code → Extensions (Ctrl+Shift+X) → `...` → Install from VSIX
-3. Or: `code --install-extension hardcode-0.0.3.vsix`
+3. Or: `code --install-extension NovaAI-0.0.3.vsix`
 
 ### First Run
-1. **Command Palette** (Ctrl+Shift+P): "HardCode: Open Simulator Workbench"
+1. **Command Palette** (Ctrl+Shift+P): "NovaAI: Open Simulator Workbench"
 2. **Select Path**: Choose folder containing `diagram.json` (e.g., `C:/Users/User/Documents/WokwiProjects/motor`)
 3. **Scan Files**: Click "Scan Files" to discover project components
 4. **Load & Simulate**: Click "▶ Load & Simulate" to display project viewer
@@ -578,7 +578,7 @@ document.getElementById('exportWokwi').addEventListener('click', () => {
 **Bidirectional**:
 - Export local → Wokwi.com (via base64-encoded URL)
 - Run local Wokwi extension with project context
-- Edit files in HardCode → reload simulation without reimporting
+- Edit files in NovaAI → reload simulation without reimporting
 
 **Full Project Visibility**:
 - Circuit diagram parts listed

@@ -19,6 +19,15 @@ export default function ProjectChat({ onIdeationStateChange }) {
   });
   const [projectMeta, setProjectMeta] = useState({});
   const [generationProfile, setGenerationProfile] = useState({});
+  const [architectureState, setArchitectureState] = useState({
+    summary: "",
+    pattern: "",
+    sourceStrategy: "",
+    entryFile: "",
+    files: [],
+    libraries: [],
+    pinAssignments: []
+  });
   const [ideationFinalized, setIdeationFinalized] = useState(false);
   const [insightView, setInsightView] = useState("overview");
   const scrollRef = useRef(null);
@@ -63,6 +72,7 @@ export default function ProjectChat({ onIdeationStateChange }) {
         setIdeaState(nextIdeaState);
         setProjectMeta(project.meta || {});
         setGenerationProfile(project.generationProfile || {});
+        setArchitectureState(project.architectureState || {});
         setIdeationFinalized(finalized);
       } catch (err) {
         console.error("Project state load error:", err);
@@ -102,6 +112,7 @@ export default function ProjectChat({ onIdeationStateChange }) {
           ideaState: res.data.ideaState,
           meta: res.data.meta,
           generationProfile: res.data.generationProfile,
+          architectureState: res.data.architectureState,
         });
       }
 
@@ -111,6 +122,7 @@ export default function ProjectChat({ onIdeationStateChange }) {
 
       setProjectMeta(res.data?.meta || {});
       setGenerationProfile(res.data?.generationProfile || {});
+      setArchitectureState(res.data?.architectureState || {});
 
       if (typeof res.data?.ideationFinalized === "boolean") {
         setIdeationFinalized(res.data.ideationFinalized);
@@ -375,6 +387,20 @@ export default function ProjectChat({ onIdeationStateChange }) {
                 ) : (
                   <p className="mt-1 text-[#22c55e]">None - ideation complete ✓</p>
                 )}
+              </section>
+              <section>
+                <p className="text-xs uppercase tracking-[0.18em] text-[#9ca3af]">Architecture Blueprint</p>
+                <div className="mt-1 space-y-1 text-[#d1d5db]">
+                  <p>Pattern: {architectureState?.pattern || "Pending"}</p>
+                  <p>Source Strategy: {architectureState?.sourceStrategy || "Pending"}</p>
+                  <p>Entry File: {architectureState?.entryFile || "sketch.ino"}</p>
+                  <p>Planned Files: {Array.isArray(architectureState?.files) ? architectureState.files.length : 0}</p>
+                  <p>Libraries: {Array.isArray(architectureState?.libraries) ? architectureState.libraries.length : 0}</p>
+                  <p>Pin Assignments: {Array.isArray(architectureState?.pinAssignments) ? architectureState.pinAssignments.length : 0}</p>
+                </div>
+                {architectureState?.summary ? (
+                  <p className="mt-2 text-[#d1d5db]">{architectureState.summary}</p>
+                ) : null}
               </section>
             </div>
           </div>

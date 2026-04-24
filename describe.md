@@ -1,11 +1,11 @@
-﻿# HardCode Project Description
+﻿# NovaAI Project Description
 
 ## Project Purpose
-HardCode is a VS Code workflow that combines a custom simulator workbench with licensed Wokwi extension integration.
+NovaAI is a VS Code workflow that combines a custom simulator workbench with licensed Wokwi extension integration.
 It helps users choose a local embedded project folder, scan key simulation files, and start simulation with correct context.
 
 ## Flow Of Use
-1. Open HardCode Simulator Workbench from Command Palette.
+1. Open NovaAI Simulator Workbench from Command Palette.
 2. Select a project folder containing diagram.json, config, and sketch files.
 3. Scan files to detect simulation assets.
 4. Review project info in the workbench (diagram/config/code).
@@ -14,10 +14,10 @@ It helps users choose a local embedded project folder, scan key simulation files
 7. Iterate by editing local files and re-running simulation.
 
 ## Folder Structure (Deep, excluding node_modules)
-Root: C:/Users/User/Desktop/HardCode
+Root: C:/Users/User/Desktop/NovaAI
 
 ```text
-HardCode
+NovaAI
   .git
   .git\COMMIT_EDITMSG
   .git\config
@@ -308,11 +308,11 @@ HardCode
   backend\src\utils
   backend\wokwi-smoke
   backend\wokwi-smoke\build
-  backend\wokwi-smoke\build\hardcode_sketch.ino.eep
-  backend\wokwi-smoke\build\hardcode_sketch.ino.elf
-  backend\wokwi-smoke\build\hardcode_sketch.ino.hex
-  backend\wokwi-smoke\build\hardcode_sketch.ino.with_bootloader.bin
-  backend\wokwi-smoke\build\hardcode_sketch.ino.with_bootloader.hex
+  backend\wokwi-smoke\build\NovaAI_sketch.ino.eep
+  backend\wokwi-smoke\build\NovaAI_sketch.ino.elf
+  backend\wokwi-smoke\build\NovaAI_sketch.ino.hex
+  backend\wokwi-smoke\build\NovaAI_sketch.ino.with_bootloader.bin
+  backend\wokwi-smoke\build\NovaAI_sketch.ino.with_bootloader.hex
   backend\wokwi-smoke\build\sketch.ino.hex
   backend\wokwi-smoke\diagram.json
   backend\wokwi-smoke\sketch.ino
@@ -321,11 +321,11 @@ HardCode
   backend\wokwi-smoke-intense
   backend\wokwi-smoke-intense\.wokwi-projects
   backend\wokwi-smoke-intense\build
-  backend\wokwi-smoke-intense\build\hardcode_sketch.ino.eep
-  backend\wokwi-smoke-intense\build\hardcode_sketch.ino.elf
-  backend\wokwi-smoke-intense\build\hardcode_sketch.ino.hex
-  backend\wokwi-smoke-intense\build\hardcode_sketch.ino.with_bootloader.bin
-  backend\wokwi-smoke-intense\build\hardcode_sketch.ino.with_bootloader.hex
+  backend\wokwi-smoke-intense\build\NovaAI_sketch.ino.eep
+  backend\wokwi-smoke-intense\build\NovaAI_sketch.ino.elf
+  backend\wokwi-smoke-intense\build\NovaAI_sketch.ino.hex
+  backend\wokwi-smoke-intense\build\NovaAI_sketch.ino.with_bootloader.bin
+  backend\wokwi-smoke-intense\build\NovaAI_sketch.ino.with_bootloader.hex
   backend\wokwi-smoke-intense\build\sketch.ino.hex
   backend\wokwi-smoke-intense\diagram.json
   backend\wokwi-smoke-intense\sketch.ino
@@ -423,10 +423,10 @@ HardCode
   vscode-extension\dist\extension.js.map
   vscode-extension\esbuild.js
   vscode-extension\eslint.config.mjs
-  vscode-extension\hardcode-0.0.2.vsix
-  vscode-extension\hardcode-0.0.3.vsix
-  vscode-extension\hardcode-0.0.4.vsix
-  vscode-extension\hardcode-vscode-extension-0.0.1.vsix
+  vscode-extension\NovaAI-0.0.2.vsix
+  vscode-extension\NovaAI-0.0.3.vsix
+  vscode-extension\NovaAI-0.0.4.vsix
+  vscode-extension\NovaAI-vscode-extension-0.0.1.vsix
   vscode-extension\i_did_this.md
   vscode-extension\out
   vscode-extension\out\extension.js

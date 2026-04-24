@@ -37,6 +37,7 @@ export const createProject = async (req, res) => {
       requirements: ai.requirements,
       unknowns: ai.unknowns
     };
+    project.architectureState = ai.architectureState;
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
     project.generationProfile = buildGenerationProfileFromMeta(project.meta || {});
@@ -52,6 +53,7 @@ export const createProject = async (req, res) => {
       projectId: project._id,
       reply: ai.question,
       ideaState: project.ideaState,
+      architectureState: project.architectureState,
       generationProfile: project.generationProfile
     });
 
@@ -268,6 +270,7 @@ export const chatProject = async (req, res) => {
       requirements: ai.requirements,
       unknowns: ai.unknowns
     };
+    project.architectureState = ai.architectureState;
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
     project.generationProfile = buildGenerationProfileFromMeta(project.meta || {});
@@ -282,6 +285,7 @@ export const chatProject = async (req, res) => {
     res.json({
       reply: ai.question,
       ideaState: project.ideaState,
+      architectureState: project.architectureState,
       generationProfile: project.generationProfile
     });
 

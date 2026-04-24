@@ -4,9 +4,11 @@ import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { useThemeStore } from "../store/useThemeStore";
 import toast from "react-hot-toast";
+import useVoiceGuidance from "../hooks/useVoiceGuidance";
 
 export default function ComponentsChat() {
   const { id } = useParams();
+  const lastVoiceErrorRef = useRef({ code: "", at: 0 });
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -15,6 +17,9 @@ export default function ComponentsChat() {
   const [generationProfile, setGenerationProfile] = useState({});
   const [activeArtifactTab, setActiveArtifactTab] = useState("notes");
   const [artifactPanelMode, setArtifactPanelMode] = useState("normal"); // normal | minimized | maximized
+  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [handsFreeMode, setHandsFreeMode] = useState(false);
+  const [speechRate, setSpeechRate] = useState(0.9);
   const [latestGenerated, setLatestGenerated] = useState({
     sketch: "",
     diagram: "",
@@ -25,6 +30,58 @@ export default function ComponentsChat() {
 
   const { theme } = useThemeStore();
   const isDark = theme === "dark";
+
+  const {
+    isVoiceSupported,
+    isRecognitionSupported,
+    status: voiceStatus,
+    diagnostics: voiceDiagnostics,
+    speakText,
+    startListening,
+    stopListening,
+    pauseForTyping,
+  } = useVoiceGuidance({
+    enabled: voiceEnabled,
+    rate: speechRate,
+    handsFree: handsFreeMode,
+    onFinalTranscript: ({ text, autoSend }) => {
+      if (!text) return;
+      setInput(text);
+      if (autoSend) {
+        sendMessage(text);
+      }
+    },
+    onInterimTranscript: (text) => {
+      if (!text) return;
+      setInput(text);
+    },
+    onError: (error) => {
+      const payload =
+        typeof error === "string"
+          ? { code: "unknown_error", message: error, recoverable: false }
+          : (error || { code: "unknown_error", message: "Voice error", recoverable: false });
+
+      const now = Date.now();
+      const recent = lastVoiceErrorRef.current;
+      if (recent.code === payload.code && now - recent.at < 3500) {
+        return;
+      }
+
+      lastVoiceErrorRef.current = { code: payload.code, at: now };
+      toast.error(payload.message || "Voice guidance error");
+    }
+  });
+
+  const voiceStatusLabel =
+    voiceStatus === "duplex"
+      ? "Speaking + Listening"
+      : voiceStatus === "speaking"
+        ? "AI Speaking"
+        : voiceStatus === "listening"
+          ? "Listening"
+          : voiceStatus === "unavailable"
+            ? "Voice Unavailable"
+            : "Idle";
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -79,10 +136,11 @@ export default function ComponentsChat() {
     loadHistoryOrInit();
   }, [id]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
+  const sendMessage = async (overrideInput) => {
+    const resolved = typeof overrideInput === "string" ? overrideInput : input;
+    if (!resolved.trim() || loading) return;
 
-    const userMsg = input;
+    const userMsg = resolved;
     setMessages(prev => [...prev, { role: "user", content: userMsg }]);
     setInput("");
     setLoading(true);
@@ -96,13 +154,67 @@ export default function ComponentsChat() {
 
       setMessages(prev => [...prev, { role: "ai", content: res.data.reply }]);
       setGenerationProfile(res.data?.generationProfile || {});
+      speakText(res.data.reply);
     } catch (err) {
       const errorMessage = err?.response?.data?.error || "Components chat failed";
       toast.error(errorMessage);
       setMessages(prev => [...prev, { role: "ai", content: errorMessage }]);
+      speakText(errorMessage);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleInputChange = (value) => {
+    pauseForTyping();
+    setInput(value);
+  };
+
+  const handleToggleVoice = () => {
+    if (!isVoiceSupported) {
+      toast.error("Voice is not supported in this browser");
+      return;
+    }
+
+    setVoiceEnabled((prev) => {
+      const next = !prev;
+
+      if (!next) {
+        stopListening();
+      } else if (handsFreeMode && isRecognitionSupported) {
+        startListening();
+      }
+
+      return next;
+    });
+  };
+
+  const handleToggleHandsFree = () => {
+    if (!isRecognitionSupported) {
+      toast.error("Speech recognition is not supported in this browser");
+      return;
+    }
+
+    if (!voiceEnabled) {
+      setVoiceEnabled(true);
+    }
+
+    setHandsFreeMode((prev) => !prev);
+  };
+
+  const handleMicToggle = () => {
+    if (!isRecognitionSupported) {
+      toast.error("Speech recognition is not supported in this browser");
+      return;
+    }
+
+    if (voiceStatus === "listening" || voiceStatus === "duplex") {
+      stopListening();
+      return;
+    }
+
+    setVoiceEnabled(true);
+    startListening();
   };
 
   const copyText = async (text, label = "Copied") => {
@@ -234,11 +346,75 @@ export default function ComponentsChat() {
             <p className={`text-[11px] font-semibold uppercase tracking-[0.25em] ${isDark ? "text-[#93c5fd]" : "text-[#0f766e]"}`}>Build Stage</p>
             <h2 className="mt-1 text-lg font-semibold">Components Control Deck</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDark ? "bg-[#172235] text-[#7dd3fc]" : "bg-[#d1fae5] text-[#0f766e]"}`}>Readiness {profileReadiness}%</span>
             <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${statusBadge.color} ${isDark ? "bg-[#1a2333]" : "bg-[#e7e5e4]"}`}>{statusBadge.label}</span>
+
+            <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+              voiceStatus === "duplex"
+                ? "bg-emerald-500/20 text-emerald-300"
+                : voiceStatus === "speaking"
+                  ? "bg-blue-500/20 text-blue-300"
+                  : voiceStatus === "listening"
+                    ? "bg-amber-500/20 text-amber-300"
+                    : voiceStatus === "unavailable"
+                      ? "bg-red-500/20 text-red-300"
+                      : (isDark ? "bg-[#1a2333] text-[#9fb3cc]" : "bg-[#e7e5e4] text-[#475569]")
+            }`}>
+              {voiceStatusLabel}
+            </span>
+
+            <button
+              onClick={handleToggleVoice}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${isDark ? "border-[#36506f] bg-[#17263a] hover:bg-[#1b314a]" : "border-[#b8ab98] bg-white hover:bg-[#f3efe7]"} ${voiceEnabled ? (isDark ? "text-[#7dd3fc]" : "text-[#0f766e]") : ""}`}
+            >
+              {voiceEnabled ? "Voice On" : "Voice Off"}
+            </button>
+
+            <button
+              onClick={handleToggleHandsFree}
+              disabled={!isRecognitionSupported}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${isDark ? "border-[#36506f] bg-[#17263a] hover:bg-[#1b314a]" : "border-[#b8ab98] bg-white hover:bg-[#f3efe7]"} ${handsFreeMode ? (isDark ? "text-emerald-300" : "text-emerald-800") : ""} ${!isRecognitionSupported ? "cursor-not-allowed opacity-50" : ""}`}
+            >
+              Hands-free {handsFreeMode ? "On" : "Off"}
+            </button>
+
+            <button
+              onClick={handleMicToggle}
+              disabled={!isRecognitionSupported}
+              className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${isDark ? "border-[#36506f] bg-[#17263a] hover:bg-[#1b314a]" : "border-[#b8ab98] bg-white hover:bg-[#f3efe7]"} ${(voiceStatus === "listening" || voiceStatus === "duplex") ? (isDark ? "text-amber-300" : "text-amber-900") : ""} ${!isRecognitionSupported ? "cursor-not-allowed opacity-50" : ""}`}
+            >
+              {voiceStatus === "listening" || voiceStatus === "duplex" ? "Stop Mic" : "Start Mic"}
+            </button>
           </div>
         </div>
+
+        <div className="mt-3 flex items-center gap-3">
+          <label className={`text-[11px] font-semibold uppercase tracking-[0.14em] ${isDark ? "text-[#93c5fd]" : "text-[#0f766e]"}`}>
+            Speech Rate
+          </label>
+          <input
+            type="range"
+            min="0.7"
+            max="1.2"
+            step="0.05"
+            value={speechRate}
+            disabled={!voiceEnabled || !isVoiceSupported}
+            onChange={(event) => setSpeechRate(Number(event.target.value))}
+            className="w-40"
+          />
+          <span className={`text-xs font-semibold ${isDark ? "text-[#9fb3cc]" : "text-[#475569]"}`}>
+            {speechRate.toFixed(2)}x
+          </span>
+        </div>
+
+        <p className={`mt-2 text-[10px] ${isDark ? "text-[#89a4c4]" : "text-[#64748b]"}`}>
+          STT {voiceDiagnostics?.sttSuccess || 0}/{voiceDiagnostics?.sttAttempts || 0} |
+          Failures {voiceDiagnostics?.sttFailures || 0} |
+          Last chunk {Math.round((voiceDiagnostics?.lastChunkBytes || 0) / 1024)}KB |
+          MIME {voiceDiagnostics?.recorderMimeType || "-"}
+          {voiceDiagnostics?.lastError ? ` | Last error: ${voiceDiagnostics.lastError}` : ""}
+        </p>
       </div>
 
       <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)]">
@@ -350,7 +526,7 @@ export default function ComponentsChat() {
                 ].map((quick) => (
                   <button
                     key={quick}
-                    onClick={() => setInput(quick)}
+                    onClick={() => handleInputChange(quick)}
                     className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${isDark ? "bg-[#18283d] text-[#7dd3fc] hover:bg-[#223754]" : "bg-white text-[#0f766e] hover:bg-[#f1ece2]"}`}
                   >
                     {quick}
@@ -366,9 +542,9 @@ export default function ComponentsChat() {
                     <input
                       className={`w-full bg-transparent px-2 py-2 text-sm outline-none ${isDark ? "placeholder:text-[#6b8bb3]" : "placeholder:text-[#9b8f7d]"}`}
                       value={input}
-                      onChange={(e) => setInput(e.target.value)}
+                      onChange={(e) => handleInputChange(e.target.value)}
                       onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                      placeholder="Ask for wiring logic, output behavior, or constraints..."
+                      placeholder={voiceEnabled ? "Type to pause voice, or speak using mic controls..." : "Ask for wiring logic, output behavior, or constraints..."}
                     />
                     <button
                       onClick={sendMessage}

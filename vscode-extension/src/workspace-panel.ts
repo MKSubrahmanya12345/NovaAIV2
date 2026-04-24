@@ -129,7 +129,7 @@ const defaultState = (): WorkspaceState => ({
     customCategory: '',
     customPins: '',
     customNotes: '',
-    customAuthor: 'HardCode',
+    customAuthor: 'NovaAI',
     error: ''
   },
   simulator: {
@@ -158,7 +158,7 @@ const isRelevantFile = (filePath: string): boolean => {
   return BUILTIN_RELEVANT_EXTENSIONS.has(path.extname(lowered));
 };
 
-export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider {
+export class NovaAIWorkspaceViewProvider implements vscode.WebviewViewProvider {
   private view?: vscode.WebviewView;
   private state: WorkspaceState = defaultState();
 
@@ -186,28 +186,28 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
   }
 
   private get backendUrl(): string {
-    const configured = vscode.workspace.getConfiguration('hardcode').get<string>('backendUrl');
+    const configured = vscode.workspace.getConfiguration('NovaAI').get<string>('backendUrl');
     return configured && configured.trim() ? configured.trim().replace(/\/$/, '') : 'http://localhost:5000';
   }
 
   private async restorePersistedState(): Promise<void> {
-    this.state.auth.token = this.context.workspaceState.get<string>('hardcode.authToken', '');
-    this.state.auth.user = this.context.workspaceState.get<any>('hardcode.authUser', null);
-    this.state.projects.activeId = this.context.workspaceState.get<string>('hardcode.activeProjectId', '');
-    this.state.repo.rootPath = this.context.workspaceState.get<string>('hardcode.repoPath', '');
-    this.state.chat.agent = this.context.workspaceState.get<ChatAgent>('hardcode.activeAgent', 'ideation');
-    this.state.simulator.active = this.context.workspaceState.get<boolean>('hardcode.simulatorActive', false);
-    this.state.simulator.minimized = this.context.workspaceState.get<boolean>('hardcode.simulatorMinimized', false);
+    this.state.auth.token = this.context.workspaceState.get<string>('NovaAI.authToken', '');
+    this.state.auth.user = this.context.workspaceState.get<any>('NovaAI.authUser', null);
+    this.state.projects.activeId = this.context.workspaceState.get<string>('NovaAI.activeProjectId', '');
+    this.state.repo.rootPath = this.context.workspaceState.get<string>('NovaAI.repoPath', '');
+    this.state.chat.agent = this.context.workspaceState.get<ChatAgent>('NovaAI.activeAgent', 'ideation');
+    this.state.simulator.active = this.context.workspaceState.get<boolean>('NovaAI.simulatorActive', false);
+    this.state.simulator.minimized = this.context.workspaceState.get<boolean>('NovaAI.simulatorMinimized', false);
   }
 
   private async persistState(): Promise<void> {
-    await this.context.workspaceState.update('hardcode.authToken', this.state.auth.token);
-    await this.context.workspaceState.update('hardcode.authUser', this.state.auth.user);
-    await this.context.workspaceState.update('hardcode.activeProjectId', this.state.projects.activeId);
-    await this.context.workspaceState.update('hardcode.repoPath', this.state.repo.rootPath);
-    await this.context.workspaceState.update('hardcode.activeAgent', this.state.chat.agent);
-    await this.context.workspaceState.update('hardcode.simulatorActive', this.state.simulator.active);
-    await this.context.workspaceState.update('hardcode.simulatorMinimized', this.state.simulator.minimized);
+    await this.context.workspaceState.update('NovaAI.authToken', this.state.auth.token);
+    await this.context.workspaceState.update('NovaAI.authUser', this.state.auth.user);
+    await this.context.workspaceState.update('NovaAI.activeProjectId', this.state.projects.activeId);
+    await this.context.workspaceState.update('NovaAI.repoPath', this.state.repo.rootPath);
+    await this.context.workspaceState.update('NovaAI.activeAgent', this.state.chat.agent);
+    await this.context.workspaceState.update('NovaAI.simulatorActive', this.state.simulator.active);
+    await this.context.workspaceState.update('NovaAI.simulatorMinimized', this.state.simulator.minimized);
   }
 
   private async bootstrapAuth(): Promise<void> {
@@ -372,7 +372,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
 
   private async loadCustomChipCatalog(): Promise<Array<Record<string, any>>> {
     const root = this.state.repo.rootPath || this.getDefaultLocalRoot();
-    const catalogPath = path.join(root, '.hardcode', 'chips.json');
+    const catalogPath = path.join(root, '.NovaAI', 'chips.json');
 
     try {
       const raw = await fs.readFile(catalogPath, 'utf8');
@@ -389,7 +389,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
       return workspaceRoot;
     }
 
-    return path.join(os.homedir(), 'Documents', 'HardCode');
+    return path.join(os.homedir(), 'Documents', 'NovaAI');
   }
 
   private async scanRepo(rootPath: string): Promise<void> {
@@ -456,7 +456,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
 
     const rootPath = picked[0].fsPath;
     this.state.repo.rootPath = rootPath;
-    await this.context.workspaceState.update('hardcode.repoPath', rootPath);
+    await this.context.workspaceState.update('NovaAI.repoPath', rootPath);
     await this.scanRepo(rootPath);
 
     if (this.state.projects.activeId) {
@@ -783,10 +783,10 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
       category: this.state.chips.customCategory.trim(),
       pins: this.state.chips.customPins.split(',').map((pin) => pin.trim()).filter(Boolean),
       notes: this.state.chips.customNotes.trim(),
-      author: this.state.chips.customAuthor.trim() || 'HardCode'
+      author: this.state.chips.customAuthor.trim() || 'NovaAI'
     };
 
-    const customPath = path.join(this.state.repo.rootPath, '.hardcode', 'chips.json');
+    const customPath = path.join(this.state.repo.rootPath, '.NovaAI', 'chips.json');
     await fs.mkdir(path.dirname(customPath), { recursive: true });
 
     let existing: any[] = [];
@@ -899,7 +899,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
         return;
       case 'setAgent':
         this.state.chat.agent = (message?.agent as ChatAgent) || 'ideation';
-        await this.context.workspaceState.update('hardcode.activeAgent', this.state.chat.agent);
+        await this.context.workspaceState.update('NovaAI.activeAgent', this.state.chat.agent);
         this.render();
         return;
       case 'sendChat':
@@ -926,7 +926,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
         this.state.chips.customCategory = String(message?.category || this.state.chips.customCategory || '');
         this.state.chips.customPins = String(message?.pins || this.state.chips.customPins || '');
         this.state.chips.customNotes = String(message?.notes || this.state.chips.customNotes || '');
-        this.state.chips.customAuthor = String(message?.author || this.state.chips.customAuthor || 'HardCode');
+        this.state.chips.customAuthor = String(message?.author || this.state.chips.customAuthor || 'NovaAI');
         await this.saveCustomChip();
         return;
       case 'toggleSimulatorMinimize':
@@ -1008,7 +1008,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HardCode Workspace</title>
+  <title>NovaAI Workspace</title>
   <style>
     :root {
       color-scheme: dark;
@@ -1220,7 +1220,7 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
   <div class="shell${simulator.active && simulator.minimized ? ' minimized' : ''}">
     <div class="topbar">
       <div class="brand">
-        <strong>HardCode Workspace</strong>
+        <strong>NovaAI Workspace</strong>
         <span>${escapeHtml(this.state.status)}</span>
       </div>
       <div class="top-actions">
@@ -1296,12 +1296,12 @@ export class HardcodeWorkspaceViewProvider implements vscode.WebviewViewProvider
               <label>Pins (comma separated)</label>
               <input name="pins" value="${escapeHtml(chips.customPins)}" placeholder="VCC, GND, IN, OUT" />
               <label>Author</label>
-              <input name="author" value="${escapeHtml(chips.customAuthor)}" placeholder="HardCode" />
+              <input name="author" value="${escapeHtml(chips.customAuthor)}" placeholder="NovaAI" />
               <label>Notes</label>
               <textarea name="notes" placeholder="Usage notes and wiring hints">${escapeHtml(chips.customNotes)}</textarea>
               <button type="submit" class="small">Save Custom Chip</button>
             </form>
-            <div class="hint">Custom chips are stored in .hardcode/chips.json inside the selected repo.</div>
+            <div class="hint">Custom chips are stored in .NovaAI/chips.json inside the selected repo.</div>
           </div>
           ${chips.error ? `<div class="error">${escapeHtml(chips.error)}</div>` : ''}
           <div class="divider"></div>

@@ -1,4 +1,4 @@
-# HardCode Feature Dossier
+# NovaAI Feature Dossier
 
 This document is the deep technical flow map for the entire codebase.
 
@@ -828,7 +828,7 @@ Activation metadata lives in `vscode-extension/package.json` (`activationEvents`
 
 ## 5.2 Simulator Workbench flow
 
-Core class: `HardcodeSimulatorPanel`.
+Core class: `NovaAISimulatorPanel`.
 
 Primary methods:
 
@@ -880,7 +880,7 @@ Each generated project writes:
 - `sketch.ino`
 - `diagram.json`
 - `libraries.txt`
-- `.hardcode-wokwi.json`
+- `.NovaAI-wokwi.json`
 
 ## 5.4 Extension tests
 
@@ -941,11 +941,11 @@ This section explicitly covers all major files by functional bucket.
 - `backend/wokwi-smoke/sketch.ino`
 - `backend/wokwi-smoke/smoke.test.yaml`
 - `backend/wokwi-smoke/wokwi.toml`
-- `backend/wokwi-smoke/build/hardcode_sketch.ino.eep`
+- `backend/wokwi-smoke/build/NovaAI_sketch.ino.eep`
 - `backend/wokwi-smoke-intense/diagram.json`
 - `backend/wokwi-smoke-intense/sketch.ino`
 - `backend/wokwi-smoke-intense/wokwi.toml`
-- `backend/wokwi-smoke-intense/build/hardcode_sketch.ino.eep`
+- `backend/wokwi-smoke-intense/build/NovaAI_sketch.ino.eep`
 
 ## 6.4 Frontend app
 

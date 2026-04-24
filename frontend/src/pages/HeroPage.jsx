@@ -114,7 +114,7 @@ export default function HeroPage() {
         <div className="mx-auto flex h-16 w-full max-w-7xl items-center justify-between px-8">
           <div className="flex items-center gap-3 group cursor-pointer">
             <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 shadow-lg shadow-indigo-500/20 flex items-center justify-center text-white font-black text-xl transition-transform group-hover:rotate-12">H</div>
-            <p className="text-xl font-black tracking-tighter">HARDCODE</p>
+            <p className="text-xl font-black tracking-tighter">NovaAI</p>
           </div>
           
           <div className="hidden md:flex items-center gap-8 text-sm font-medium">
@@ -148,15 +148,11 @@ export default function HeroPage() {
             </div>
             
             <h1 className={`mt-8 text-6xl font-black tracking-tight sm:text-8xl leading-[0.9] ${isDark ? "text-white" : "text-slate-900"}`}>
-              Software that <br />
-              <span className="bg-gradient-to-r from-indigo-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                feels like silk.
-              </span>
+              Your AI Companion for Hardware
             </h1>
 
             <p className={`mt-8 max-w-xl text-xl leading-relaxed ${isDark ? "text-slate-400" : "text-slate-600"}`}>
-              HardCode is a high-performance project workspace designed for teams who value clarity over complexity. 
-              No clutter, no bloat—just pure execution.
+              Go from idea to working prototype in minutes, not weekends. Just tell it what you want.
             </p>
 
             <div className="mt-12 flex flex-wrap gap-5">
@@ -297,7 +293,7 @@ export default function HeroPage() {
       </main>
 
       <footer className="py-12 border-t border-current/5 mt-20 text-center opacity-40 text-xs font-bold uppercase tracking-[0.3em]">
-        © 2026 HardCode Engineering. All Rights Reserved.
+        © 2026 NovaAI Engineering. All Rights Reserved.
       </footer>
     </div>
   );

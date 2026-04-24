@@ -1,8 +1,8 @@
-# TASKS_2 - HardCode Extension Migration Plan
+# TASKS_2 - NovaAI Extension Migration Plan
 
 ## Goal
 
-Move the current HardCode workflow from the web app into the VS Code extension so the extension becomes the primary product surface.
+Move the current NovaAI workflow from the web app into the VS Code extension so the extension becomes the primary product surface.
 
 The extension must support:
 (basically the stuff from the  frontend and backend ), nothing to think about, just move 

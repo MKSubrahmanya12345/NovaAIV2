@@ -48,6 +48,7 @@ export const initComponents = async (req, res) => {
       components: ai.components,
       apiEndpoints: ai.apiEndpoints
     };
+    project.architectureState = ai.architectureState;
 
     if (!project.componentsMessages) project.componentsMessages = [];
 
@@ -61,6 +62,7 @@ export const initComponents = async (req, res) => {
     res.json({
       reply: ai.reply,
       componentsState: project.componentsState,
+      architectureState: project.architectureState,
       generationProfile: project.generationProfile || null
     });
 
@@ -108,6 +110,7 @@ export const chatComponents = async (req, res) => {
       components: ai.components,
       apiEndpoints: ai.apiEndpoints
     };
+    project.architectureState = ai.architectureState;
 
     project.componentsMessages.push({
       role: "ai",
@@ -119,6 +122,7 @@ export const chatComponents = async (req, res) => {
     res.json({
       reply: ai.reply,
       componentsState: project.componentsState,
+      architectureState: project.architectureState,
       generationProfile: project.generationProfile || null
     });
 
@@ -155,6 +159,7 @@ export const generateWokwiFilesFromAI = async (req, res) => {
     res.json({
       projectId,
       generated,
+      architectureState: project.architectureState,
       generationProfile: project.generationProfile || null
     });
   } catch (err) {

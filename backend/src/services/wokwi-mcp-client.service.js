@@ -60,7 +60,7 @@ export const startWokwiMcpSession = async ({ projectPath, quiet = true }) => {
 
   const client = new Client(
     {
-      name: "hardcode-wokwi-mcp-client",
+      name: "NovaAI-wokwi-mcp-client",
       version: "1.0.0"
     },
     {

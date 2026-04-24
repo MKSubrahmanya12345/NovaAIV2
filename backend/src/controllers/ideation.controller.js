@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import Project from "../models/project.model.js";
-import { buildGenerationProfileFromMeta, processInput } from "../services/ai.services.js";
+import { buildGenerationProfileFromMeta, normalizeArchitectureState, processInput } from "../services/ai.services.js";
 
 const isIdeaFinalized = (project) => {
   return Boolean(project?.ideaState?.summary?.trim()) && (project?.ideaState?.unknowns?.length ?? 0) === 0;
@@ -17,7 +17,7 @@ const applyServoOverdoneIdeation = (project, userText) => {
       "Use an Arduino Mega as the controller",
       "Attach 32 servos on pins 22..53",
       "Provide Wokwi `servo.ino` and `diagram.json` files that match the ServoOverdone preset",
-      "No AI generation for the preset; return hardcoded files"
+      "No AI generation for the preset; return NovaAId files"
     ],
     unknowns: []
   };
@@ -30,10 +30,46 @@ const applyServoOverdoneIdeation = (project, userText) => {
   project.meta.detectedAt = new Date();
 
   project.generationProfile = buildGenerationProfileFromMeta(project.meta || {});
+  project.architectureState = normalizeArchitectureState({
+    summary: "ServoOverdone execution blueprint",
+    pattern: "sequenced-motion-controller",
+    sourceStrategy: "single-sketch",
+    entryFile: "servo.ino",
+    files: [
+      {
+        path: "servo.ino",
+        role: "entrypoint",
+        responsibility: "Runs the full ServoOverdone motion demo."
+      },
+      {
+        path: "diagram.json",
+        role: "simulation",
+        responsibility: "Defines the 32-servo Wokwi layout."
+      }
+    ],
+    libraries: [
+      {
+        name: "Servo",
+        purpose: "Drive the servo outputs"
+      }
+    ],
+    runtimeFlow: [
+      "Initialize 32 servo channels",
+      "Select active motion sequence",
+      "Update servo targets per frame"
+    ],
+    assumptions: ["Preset stays locked to the bundled ServoOverdone files."],
+    openDecisions: []
+  }, {
+    project,
+    summary: project.ideaState.summary,
+    requirements: project.ideaState.requirements,
+    unknowns: project.ideaState.unknowns
+  });
 
   project.messages.push({
     role: "ai",
-    content: `Locked. Using hardcoded preset for "${String(userText || "").trim()}". Components AI is now unlocked — click Generate Files.`
+    content: `Locked. Using NovaAId preset for "${String(userText || "").trim()}". Components AI is now unlocked — click Generate Files.`
   });
 };
 
@@ -66,6 +102,7 @@ export const createIdeationProject = async (req, res) => {
         reply: latestReply,
         question: "",
         ideaState: recentSameProject.ideaState,
+        architectureState: recentSameProject.architectureState,
         ideationFinalized: isIdeaFinalized(recentSameProject),
         deduped: true
       });
@@ -83,7 +120,7 @@ export const createIdeationProject = async (req, res) => {
       meta: { stage: "idea" }
     });
 
-    // Hardcoded shortcut: skip AI, finalize immediately.
+    // NovaAId shortcut: skip AI, finalize immediately.
     if (isServoOverdoneShortcut(normalizedDescription)) {
       applyServoOverdoneIdeation(project, normalizedDescription);
       await project.save();
@@ -94,6 +131,7 @@ export const createIdeationProject = async (req, res) => {
         reply: latestReply,
         question: "",
         ideaState: project.ideaState,
+        architectureState: project.architectureState,
         ideationFinalized: isIdeaFinalized(project),
         generationProfile: project.generationProfile
       });
@@ -106,6 +144,7 @@ export const createIdeationProject = async (req, res) => {
       requirements: ai.requirements,
       unknowns: ai.unknowns
     };
+    project.architectureState = ai.architectureState;
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
 
@@ -145,6 +184,7 @@ export const createIdeationProject = async (req, res) => {
       reply: ai.assistantReply,
       question: ai.question,
       ideaState: project.ideaState,
+      architectureState: project.architectureState,
       ideationFinalized: isIdeaFinalized(project),
       generationProfile: project.generationProfile
     });
@@ -181,7 +221,7 @@ export const chatIdeationProject = async (req, res) => {
       content: message.trim()
     });
 
-    // Hardcoded shortcut: skip AI, finalize immediately.
+    // NovaAId shortcut: skip AI, finalize immediately.
     if (isServoOverdoneShortcut(message)) {
       applyServoOverdoneIdeation(project, message);
       await project.save();
@@ -191,6 +231,7 @@ export const chatIdeationProject = async (req, res) => {
         reply: latestReply,
         question: "",
         ideaState: project.ideaState,
+        architectureState: project.architectureState,
         ideationFinalized: isIdeaFinalized(project),
         meta: project.meta,
         generationProfile: project.generationProfile
@@ -208,6 +249,7 @@ export const chatIdeationProject = async (req, res) => {
       requirements: ai.requirements,
       unknowns: ai.unknowns
     };
+    project.architectureState = ai.architectureState;
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
 
@@ -248,6 +290,7 @@ export const chatIdeationProject = async (req, res) => {
       reply: ai.assistantReply,
       question: ai.question,
       ideaState: project.ideaState,
+      architectureState: project.architectureState,
       ideationFinalized: isIdeaFinalized(project),
       meta: project.meta,
       generationProfile: project.generationProfile

@@ -18,7 +18,11 @@ import {
 import {
   writeWokwiProjectFiles,
   compileWokwiSketch,
-  readWokwiProjectFiles
+  readWokwiProjectFiles,
+  scanWokwiWorkbenchTree,
+  readWokwiWorkbenchFile,
+  getWokwiWorkbenchFileMeta,
+  writeWokwiWorkbenchFile
 } from "../services/wokwi-local.service.js";
 import { generateCustomChipTemplate } from "../services/ai.services.js";
 
@@ -53,6 +57,34 @@ const saveEvidence = async (project, key, value) => {
   project.wokwiEvidence[key] = value;
   project.wokwiEvidence.updatedAt = new Date();
   await project.save();
+};
+
+const sendWorkbenchError = (res, error, fallbackMessage) => {
+  if (error?.code === "WORKBENCH_PROJECT_PATH_REQUIRED") {
+    return res.status(400).json({ error: error.message });
+  }
+
+  if (error?.code === "WORKBENCH_PROJECT_PATH_MISSING" || error?.code === "WORKBENCH_FILE_MISSING") {
+    return res.status(404).json({ error: error.message });
+  }
+
+  if (
+    error?.code === "WORKBENCH_PROJECT_NOT_DIRECTORY"
+    || error?.code === "WORKBENCH_FILE_NOT_A_FILE"
+    || error?.code === "WORKBENCH_PATH_ESCAPE"
+    || error?.code === "WORKBENCH_CONTENT_REQUIRED"
+  ) {
+    return res.status(400).json({ error: error.message });
+  }
+
+  if (error?.code === "WORKBENCH_FILE_CONFLICT") {
+    return res.status(409).json({
+      error: error.message,
+      currentFile: error.currentFile || null
+    });
+  }
+
+  return res.status(500).json({ error: error.message || fallbackMessage });
 };
 
 export const lintProjectWokwi = async (req, res) => {
@@ -318,6 +350,119 @@ export const getLocalWokwiFiles = async (req, res) => {
   }
 };
 
+export const getWorkbenchTree = async (req, res) => {
+  try {
+    const { projectId, projectPath = "" } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+    const workbench = await scanWokwiWorkbenchTree({ projectPath: resolvedPath });
+
+    res.json({
+      projectId,
+      projectPath: workbench.projectPath,
+      preferredFile: workbench.preferredFile,
+      tree: workbench.tree,
+      stats: workbench.stats
+    });
+  } catch (error) {
+    return sendWorkbenchError(res, error, "Failed to load workbench project tree");
+  }
+};
+
+export const readWorkbenchFileContent = async (req, res) => {
+  try {
+    const { projectId, projectPath = "", filePath = "" } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+    const file = await readWokwiWorkbenchFile({
+      projectPath: resolvedPath,
+      filePath
+    });
+
+    res.json({
+      projectId,
+      projectPath: resolvedPath,
+      ...file
+    });
+  } catch (error) {
+    return sendWorkbenchError(res, error, "Failed to load workbench file");
+  }
+};
+
+export const getWorkbenchFileStatus = async (req, res) => {
+  try {
+    const { projectId, projectPath = "", filePath = "" } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+    const file = await getWokwiWorkbenchFileMeta({
+      projectPath: resolvedPath,
+      filePath
+    });
+
+    res.json({
+      projectId,
+      projectPath: resolvedPath,
+      file
+    });
+  } catch (error) {
+    return sendWorkbenchError(res, error, "Failed to load workbench file metadata");
+  }
+};
+
+export const writeWorkbenchFileContent = async (req, res) => {
+  try {
+    const {
+      projectId,
+      projectPath = "",
+      filePath = "",
+      content = "",
+      expectedModifiedAtMs,
+      force = false
+    } = req.body;
+
+    const access = await ensureProjectAccess(projectId, req.user._id);
+    if (access.error) {
+      return res.status(access.error.status).json(access.error.payload);
+    }
+
+    const project = access.project;
+    const resolvedPath = projectPath || project.wokwiProjectPath || "";
+    const result = await writeWokwiWorkbenchFile({
+      projectPath: resolvedPath,
+      filePath,
+      content,
+      expectedModifiedAtMs,
+      force
+    });
+
+    res.json({
+      projectId,
+      projectPath: resolvedPath,
+      ...result
+    });
+  } catch (error) {
+    return sendWorkbenchError(res, error, "Failed to save workbench file");
+  }
+};
+
 export const syncCompileRunWokwi = async (req, res) => {
   try {
     const {
@@ -392,7 +537,7 @@ export const syncCompileRunWokwi = async (req, res) => {
       });
     }
 
-    const artifactsDir = path.join(resolvedPath, ".hardcode");
+    const artifactsDir = path.join(resolvedPath, ".NovaAI");
     let screenshotFile = "";
     if (captureScreenshot) {
       await mkdir(artifactsDir, { recursive: true });
@@ -440,7 +585,7 @@ export const getLocalWokwiScreenshot = async (req, res) => {
       return res.status(400).json({ error: "wokwiProjectPath is not configured" });
     }
 
-    const screenshotPath = path.join(resolvedPath, ".hardcode", "latest-screenshot.png");
+    const screenshotPath = path.join(resolvedPath, ".NovaAI", "latest-screenshot.png");
     if (!existsSync(screenshotPath)) {
       return res.status(404).json({ error: "No local screenshot available yet" });
     }

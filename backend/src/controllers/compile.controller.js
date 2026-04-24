@@ -42,7 +42,7 @@ export const compileSketchToHex = async (req, res) => {
     }
 
     // Create temporary directory for compilation
-    const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "hardcode-compile-"));
+    const tmpRoot = await mkdtemp(path.join(os.tmpdir(), "NovaAI-compile-"));
 
     try {
       // Write sketch file

@@ -3,9 +3,21 @@ import { buildWokwiEvidenceText } from "./wokwi-runner.service.js";
 import { formatWokwiComponentCatalogForPrompt, findUnsupportedPartTypesInText } from "../lib/wokwi-components.js";
 import { getAIContext, getRegistry } from "./registry.service.js";
 
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
+let groqClient = null;
+
+const getGroqClient = () => {
+  if (groqClient) {
+    return groqClient;
+  }
+
+  const apiKey = String(process.env.GROQ_API_KEY || "").trim();
+  if (!apiKey) {
+    throw new Error("GROQ_API_KEY is missing (required only when calling AI).");
+  }
+
+  groqClient = new Groq({ apiKey });
+  return groqClient;
+};
 
 // Board canonicalization:
 // - Persist meta.board / generationProfile.board as registry keys (e.g., ARDUINO_MEGA)
@@ -48,6 +60,273 @@ const cleanArray = (value) => {
       .map(item => (typeof item === "string" ? item.trim() : ""))
       .filter(Boolean)
   )];
+};
+
+const cleanText = (value = "") => String(value || "").trim();
+
+const dedupeByKey = (items, getKey) => {
+  const seen = new Set();
+
+  return items.filter((item) => {
+    const key = cleanText(getKey(item)).toLowerCase();
+    if (!key || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+};
+
+const normalizeArchitectureFiles = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value
+    .map((item) => {
+      if (typeof item === "string") {
+        return {
+          path: cleanText(item),
+          role: "",
+          responsibility: ""
+        };
+      }
+
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      return {
+        path: cleanText(item.path),
+        role: cleanText(item.role),
+        responsibility: cleanText(item.responsibility)
+      };
+    })
+    .filter((item) => item?.path);
+
+  return dedupeByKey(normalized, (item) => item.path);
+};
+
+const normalizeArchitectureLibraries = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value
+    .map((item) => {
+      if (typeof item === "string") {
+        return {
+          name: cleanText(item),
+          purpose: ""
+        };
+      }
+
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      return {
+        name: cleanText(item.name),
+        purpose: cleanText(item.purpose)
+      };
+    })
+    .filter((item) => item?.name);
+
+  return dedupeByKey(normalized, (item) => item.name);
+};
+
+const normalizeArchitecturePins = (value) => {
+  if (!Array.isArray(value)) return [];
+
+  const normalized = value
+    .map((item) => {
+      if (!item || typeof item !== "object") {
+        return null;
+      }
+
+      return {
+        component: cleanText(item.component),
+        signal: cleanText(item.signal),
+        boardPin: cleanText(item.boardPin),
+        notes: cleanText(item.notes)
+      };
+    })
+    .filter((item) => item?.component || item?.signal || item?.boardPin);
+
+  return dedupeByKey(normalized, (item) => `${item.component}|${item.signal}|${item.boardPin}`);
+};
+
+const inferArchitectureLibraries = (text = "") => {
+  const source = String(text || "").toLowerCase();
+  const inferred = [];
+
+  if (/\bkeypad\b/.test(source)) {
+    inferred.push({ name: "Keypad", purpose: "Scan matrix keypad input" });
+  }
+  if (/\blcd\b|liquidcrystal/.test(source)) {
+    inferred.push({ name: "LiquidCrystal", purpose: "Drive character LCD output" });
+  }
+  if (/\bservo\b/.test(source)) {
+    inferred.push({ name: "Servo", purpose: "Control servo movement" });
+  }
+  if (/\bneopixel\b|\bws2812\b/.test(source)) {
+    inferred.push({ name: "Adafruit NeoPixel", purpose: "Drive addressable LEDs" });
+  }
+
+  return dedupeByKey(inferred, (item) => item.name);
+};
+
+const isComplexArchitectureProject = ({ text = "", requirements = [], project = {} }) => {
+  const source = String(text || "").toLowerCase();
+  const componentCount = Number(project?.meta?.componentCount || requirements.length || 0);
+
+  return componentCount >= 5
+    || requirements.length >= 5
+    || /(keypad|lcd|display|servo|screen|menu|mode|state machine|lock|password|sensor)/i.test(source);
+};
+
+const buildFallbackArchitectureFiles = ({ sourceStrategy = "single-sketch" }) => {
+  if (sourceStrategy === "multi-file-modular") {
+    return [
+      {
+        path: "sketch.ino",
+        role: "entrypoint",
+        responsibility: "Own setup()/loop() and delegate orchestration to focused modules."
+      },
+      {
+        path: "Pins.h",
+        role: "pin-map",
+        responsibility: "Centralize all board pin assignments and shared hardware constants."
+      },
+      {
+        path: "AppController.h",
+        role: "module-interface",
+        responsibility: "Declare the main orchestration interface and shared control API."
+      },
+      {
+        path: "AppController.cpp",
+        role: "module-logic",
+        responsibility: "Implement state transitions, input handling, and actuator coordination."
+      },
+      {
+        path: "diagram.json",
+        role: "simulation",
+        responsibility: "Define the Wokwi circuit parts and wiring."
+      },
+      {
+        path: "libraries.txt",
+        role: "dependencies",
+        responsibility: "List required Arduino/Wokwi libraries for simulator parity."
+      }
+    ];
+  }
+
+  return [
+    {
+      path: "sketch.ino",
+      role: "entrypoint",
+      responsibility: "Contain the main Arduino logic in one compact sketch."
+    },
+    {
+      path: "diagram.json",
+      role: "simulation",
+      responsibility: "Define the Wokwi circuit parts and wiring."
+    }
+  ];
+};
+
+const buildFallbackArchitectureState = ({
+  project = {},
+  summary = "",
+  requirements = [],
+  unknowns = [],
+  current = {}
+}) => {
+  const text = [
+    project?.description || "",
+    summary,
+    ...(Array.isArray(requirements) ? requirements : []),
+    project?.componentsState?.architecture || ""
+  ].join(" ");
+
+  const sourceStrategy = cleanText(current?.sourceStrategy)
+    || (isComplexArchitectureProject({ text, requirements, project }) ? "multi-file-modular" : "single-sketch");
+
+  const pattern = cleanText(current?.pattern)
+    || (/state machine|mode|menu|lock|password/i.test(text) ? "finite-state-machine" : "single-loop");
+
+  const inferredLibraries = inferArchitectureLibraries(text);
+  const runtimeFlow = cleanArray(current?.runtimeFlow).length > 0
+    ? cleanArray(current.runtimeFlow)
+    : (pattern === "finite-state-machine"
+        ? ["Read inputs", "Evaluate state transitions", "Drive outputs", "Refresh user feedback"]
+        : ["Read inputs", "Run core behavior", "Update outputs"]);
+
+  const assumptions = cleanArray(current?.assumptions).length > 0
+    ? cleanArray(current.assumptions)
+    : [
+        "Board family stays locked unless the user explicitly changes it.",
+        "Pin assignments can start as provisional and be refined in Components AI."
+      ];
+
+  const openDecisions = cleanArray(current?.openDecisions).length > 0
+    ? cleanArray(current.openDecisions)
+    : cleanArray(unknowns);
+
+  return {
+    summary: cleanText(current?.summary) || (summary ? `Execution blueprint for ${summary}` : "Execution blueprint pending."),
+    pattern,
+    sourceStrategy,
+    entryFile: cleanText(current?.entryFile) || "sketch.ino",
+    files: normalizeArchitectureFiles(current?.files).length > 0
+      ? normalizeArchitectureFiles(current.files)
+      : buildFallbackArchitectureFiles({ sourceStrategy }),
+    libraries: normalizeArchitectureLibraries(current?.libraries).length > 0
+      ? normalizeArchitectureLibraries(current.libraries)
+      : inferredLibraries,
+    pinAssignments: normalizeArchitecturePins(current?.pinAssignments),
+    runtimeFlow,
+    assumptions,
+    openDecisions
+  };
+};
+
+export const normalizeArchitectureState = (raw, { project = {}, summary = "", requirements = [], unknowns = [] } = {}) => {
+  const current = project?.architectureState && typeof project.architectureState === "object"
+    ? project.architectureState
+    : {};
+
+  const fallback = buildFallbackArchitectureState({
+    project,
+    summary,
+    requirements,
+    unknowns,
+    current
+  });
+
+  const source = raw && typeof raw === "object" ? raw : {};
+  const currentFiles = normalizeArchitectureFiles(current?.files);
+  const currentLibraries = normalizeArchitectureLibraries(current?.libraries);
+  const currentPins = normalizeArchitecturePins(current?.pinAssignments);
+  const sourceFiles = normalizeArchitectureFiles(source?.files);
+  const sourceLibraries = normalizeArchitectureLibraries(source?.libraries);
+  const sourcePins = normalizeArchitecturePins(source?.pinAssignments);
+  const currentRuntimeFlow = cleanArray(current?.runtimeFlow);
+  const currentAssumptions = cleanArray(current?.assumptions);
+  const currentOpenDecisions = cleanArray(current?.openDecisions);
+  const sourceRuntimeFlow = cleanArray(source?.runtimeFlow);
+  const sourceAssumptions = cleanArray(source?.assumptions);
+  const sourceOpenDecisions = cleanArray(source?.openDecisions);
+
+  return {
+    summary: cleanText(source?.summary) || cleanText(current?.summary) || fallback.summary,
+    pattern: cleanText(source?.pattern) || cleanText(current?.pattern) || fallback.pattern,
+    sourceStrategy: cleanText(source?.sourceStrategy) || cleanText(current?.sourceStrategy) || fallback.sourceStrategy,
+    entryFile: cleanText(source?.entryFile) || cleanText(current?.entryFile) || fallback.entryFile,
+    files: sourceFiles.length > 0 ? sourceFiles : (currentFiles.length > 0 ? currentFiles : fallback.files),
+    libraries: sourceLibraries.length > 0 ? sourceLibraries : (currentLibraries.length > 0 ? currentLibraries : fallback.libraries),
+    pinAssignments: sourcePins.length > 0 ? sourcePins : (currentPins.length > 0 ? currentPins : fallback.pinAssignments),
+    runtimeFlow: sourceRuntimeFlow.length > 0 ? sourceRuntimeFlow : (currentRuntimeFlow.length > 0 ? currentRuntimeFlow : fallback.runtimeFlow),
+    assumptions: sourceAssumptions.length > 0 ? sourceAssumptions : (currentAssumptions.length > 0 ? currentAssumptions : fallback.assumptions),
+    openDecisions: sourceOpenDecisions.length > 0 ? sourceOpenDecisions : (currentOpenDecisions.length > 0 ? currentOpenDecisions : fallback.openDecisions),
+    updatedAt: new Date()
+  };
 };
 
 const stripThinking = (value = "") => {
@@ -108,6 +387,29 @@ const buildFallbackIdeationReply = ({ summary, requirements, unknowns, question,
   return "Ideation is updated with practical assumptions. Continue in Components section for implementation details.";
 };
 
+const buildIdeationParseFallback = ({ project, userInput, rawText = "" }) => {
+  const summary = cleanText(project?.ideaState?.summary);
+  const requirements = cleanArray(project?.ideaState?.requirements);
+  const unknowns = cleanArray(project?.ideaState?.unknowns);
+  const assistantReply = cleanText(stripThinking(rawText))
+    || buildFallbackIdeationReply({
+      summary,
+      requirements,
+      unknowns,
+      question: "",
+      userInput
+    });
+
+  return {
+    summary,
+    requirements,
+    unknowns,
+    question: "",
+    assistantReply,
+    architectureState: project?.architectureState || {}
+  };
+};
+
 const applyIdeationGuards = (project, userInput, output) => {
   const sanitized = { ...output };
 
@@ -134,45 +436,134 @@ const applyIdeationGuards = (project, userInput, output) => {
     });
   }
 
+  sanitized.architectureState = normalizeArchitectureState(sanitized.architectureState, {
+    project,
+    summary: sanitized.summary,
+    requirements: sanitized.requirements,
+    unknowns: sanitized.unknowns
+  });
+
   return sanitized;
 };
 
 /*
 UTIL: safe JSON parse
 */
-const safeParse = (text) => {
-  const cleaned = stripThinking(text);
+export const safeParse = (text) => {
+  const cleaned = normalizeJsonCandidate(text);
+
+  const direct = parseJsonIfPossible(cleaned);
+  if (direct && typeof direct === "object") {
+    return direct;
+  }
+
+  const fencedCandidates = [...cleaned.matchAll(/```(?:json)?\s*([\s\S]*?)\s*```/gi)]
+    .map((match) => parseJsonIfPossible(match?.[1] || ""))
+    .filter((value) => value && typeof value === "object");
+  const fenced = pickBestJsonCandidate(fencedCandidates);
+  if (fenced) {
+    return fenced;
+  }
+
+  const balanced = pickBestJsonCandidate(extractBalancedJsonObjects(cleaned));
+  if (balanced) {
+    return balanced;
+  }
+
+  throw new Error(`AI response parsing failed. Excerpt: ${cleaned.replace(/\s+/g, " ").trim().slice(0, 400) || "(empty)"}`);
+};
+
+function stripJsonComments(value = "") {
+  return String(value || "")
+    .replace(/^\s*\/\/.*$/gm, "")
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .trim();
+}
+
+function normalizeJsonishText(value = "") {
+  return String(value || "")
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .replace(/[â€œâ€]/g, "\"")
+    .replace(/[â€˜â€™]/g, "'")
+    .trim();
+}
+
+function stripTrailingCommas(value = "") {
+  return String(value || "").replace(/,(\s*[}\]])/g, "$1");
+}
+
+function normalizeJsonCandidate(value = "") {
+  return stripTrailingCommas(
+    stripJsonComments(
+      normalizeJsonishText(
+        stripThinking(value)
+      )
+    )
+  );
+}
+
+function parseJsonIfPossible(value = "") {
+  const cleaned = normalizeJsonCandidate(value);
+  if (!cleaned) {
+    return null;
+  }
 
   try {
     return JSON.parse(cleaned);
   } catch {
-    // try to extract JSON block
-    const jsonBlock = cleaned.match(/```json\s*([\s\S]*?)\s*```/i);
-    if (jsonBlock?.[1]) {
-      try {
-        return JSON.parse(jsonBlock[1]);
-      } catch {}
-    }
-
-    const match = cleaned.match(/\{[\s\S]*\}/);
-    if (match) {
-      try {
-        return JSON.parse(match[0]);
-      } catch {}
-    }
-    throw new Error("AI response parsing failed");
-  }
-};
-
-const parseJsonIfPossible = (value = "") => {
-  try {
-    return JSON.parse(value);
-  } catch {
     return null;
   }
-};
+}
 
-const extractBalancedJsonObjects = (text = "") => {
+function scoreJsonCandidate(value) {
+  if (!value || typeof value !== "object") {
+    return -1;
+  }
+
+  const expectedKeys = [
+    "summary",
+    "requirements",
+    "unknowns",
+    "question",
+    "assistantReply",
+    "architectureState",
+    "architecture",
+    "components",
+    "reply",
+    "screens",
+    "chipName",
+    "sketchIno",
+    "diagramJson"
+  ];
+
+  let score = 0;
+  for (const key of expectedKeys) {
+    if (Object.prototype.hasOwnProperty.call(value, key)) {
+      score += 1;
+    }
+  }
+
+  return score;
+}
+
+function pickBestJsonCandidate(candidates = []) {
+  const valid = candidates.filter((value) => value && typeof value === "object");
+  if (valid.length === 0) {
+    return null;
+  }
+
+  return [...valid].sort((left, right) => {
+    const scoreDiff = scoreJsonCandidate(right) - scoreJsonCandidate(left);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+
+    return JSON.stringify(right).length - JSON.stringify(left).length;
+  })[0];
+}
+
+function extractBalancedJsonObjects(text = "") {
   const source = String(text || "");
   const results = [];
 
@@ -224,7 +615,7 @@ const extractBalancedJsonObjects = (text = "") => {
   }
 
   return results;
-};
+}
 
 const recoverGeneratedAssetsFromText = (text = "") => {
   const cleaned = stripThinking(text);
@@ -274,11 +665,25 @@ const recoverGeneratedAssetsFromText = (text = "") => {
 COMMON CALL
 */
 const callAI = async (prompt) => {
-  const res = await groq.chat.completions.create({
+  const groq = getGroqClient();
+  const baseArgs = {
     model: process.env.GROQ_MODEL || "gpt-4o",
-    messages: [{ role: "user", content: prompt }],
+    messages: [
+      { role: "system", content: "Return ONLY valid JSON. No markdown. No prose. No <think>." },
+      { role: "user", content: prompt }
+    ],
     temperature: 0.2
-  });
+  };
+
+  let res;
+  try {
+    res = await groq.chat.completions.create({
+      ...baseArgs,
+      response_format: { type: "json_object" }
+    });
+  } catch {
+    res = await groq.chat.completions.create(baseArgs);
+  }
 
   return res.choices[0].message.content.trim();
 };
@@ -300,12 +705,12 @@ const buildFallbackCustomChipTemplate = ({ chipName, purpose }) => {
 
   const chipJson = {
     name: normalizedName,
-    author: "HardCode AI",
+    author: "NovaAI AI",
     pins: ["VCC", "GND", "IN", "OUT"],
     controls: []
   };
 
-  const chipC = `// Wokwi Custom Chip - generated by HardCode\n// Purpose: ${purpose || "Custom simulation component"}\n\n#include \"wokwi-api.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct {\n  pin_t pin_in;\n  pin_t pin_out;\n} chip_state_t;\n\nstatic void pin_in_changed(void *user_data, pin_t pin, uint32_t value) {\n  chip_state_t *chip = (chip_state_t *)user_data;\n  pin_write(chip->pin_out, value);\n}\n\nvoid chip_init() {\n  chip_state_t *chip = malloc(sizeof(chip_state_t));\n\n  chip->pin_in = pin_init(\"IN\", INPUT);\n  chip->pin_out = pin_init(\"OUT\", OUTPUT);\n\n  const pin_watch_config_t watch = {\n    .edge = BOTH,\n    .pin = chip->pin_in,\n    .user_data = chip,\n    .callback = pin_in_changed,\n  };\n  pin_watch(&watch);\n\n  printf(\"${normalizedName} initialized\\n\");\n}\n`;
+  const chipC = `// Wokwi Custom Chip - generated by NovaAI\n// Purpose: ${purpose || "Custom simulation component"}\n\n#include \"wokwi-api.h\"\n#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct {\n  pin_t pin_in;\n  pin_t pin_out;\n} chip_state_t;\n\nstatic void pin_in_changed(void *user_data, pin_t pin, uint32_t value) {\n  chip_state_t *chip = (chip_state_t *)user_data;\n  pin_write(chip->pin_out, value);\n}\n\nvoid chip_init() {\n  chip_state_t *chip = malloc(sizeof(chip_state_t));\n\n  chip->pin_in = pin_init(\"IN\", INPUT);\n  chip->pin_out = pin_init(\"OUT\", OUTPUT);\n\n  const pin_watch_config_t watch = {\n    .edge = BOTH,\n    .pin = chip->pin_in,\n    .user_data = chip,\n    .callback = pin_in_changed,\n  };\n  pin_watch(&watch);\n\n  printf(\"${normalizedName} initialized\\n\");\n}\n`;
 
   return {
     chipName: normalizedName,
@@ -435,7 +840,7 @@ ${userPrompt || ""}
 };
 
 const fallbackGeneratedSketch = `/**
- * Generic Arduino starter generated by HardCode AI
+ * Generic Arduino starter generated by NovaAI AI
  * Replace behavior according to the project requirements.
  */
 
@@ -464,7 +869,7 @@ void loop() {
 
 const fallbackGeneratedDiagram = {
   version: 1,
-  author: "HardCode AI",
+  author: "NovaAI AI",
   editor: "wokwi",
   parts: [
     { type: "wokwi-arduino-uno", id: "uno", top: 183, left: 18.6, attrs: {} },
@@ -798,7 +1203,7 @@ const normalizeGeneratedAssetsOutput = (raw) => {
   const safeDiagram = diagramJson && typeof diagramJson === "object"
     ? {
         version: Number(diagramJson?.version || 1),
-        author: String(diagramJson?.author || "HardCode AI"),
+        author: String(diagramJson?.author || "NovaAI AI"),
         editor: String(diagramJson?.editor || "wokwi"),
         parts: normalizedParts,
         connections: ensuredConnections,
@@ -808,7 +1213,7 @@ const normalizeGeneratedAssetsOutput = (raw) => {
       }
     : {
         version: 1,
-        author: "HardCode AI",
+        author: "NovaAI AI",
         editor: "wokwi",
         parts: [],
         connections: [],
@@ -1089,7 +1494,7 @@ const buildSimonGameDiagramFromData = (project = {}) => {
 
   return {
     version: 1,
-    author: String(project?.description?.includes("Uri Shaked") ? "Uri Shaked" : "HardCode AI"),
+    author: String(project?.description?.includes("Uri Shaked") ? "Uri Shaked" : "NovaAI AI"),
     editor: "wokwi",
     parts,
     connections: normalizeConnectionStyle([
@@ -1150,6 +1555,7 @@ const enforceCatalogForIdeation = (output) => {
   const combinedText = [
     output.summary,
     ...(output.requirements || []),
+    JSON.stringify(output.architectureState || {}),
     output.assistantReply,
     output.question
   ].join("\n");
@@ -1174,6 +1580,7 @@ const enforceCatalogForComponents = (output) => {
     output.architecture,
     ...(output.components || []),
     ...(output.apiEndpoints || []),
+    JSON.stringify(output.architectureState || {}),
     output.reply
   ].join("\n");
 
@@ -1229,7 +1636,10 @@ const normalizeIdeationOutput = (raw, userInput, fallbackQuestion = "Please prov
     requirements,
     unknowns,
     question,
-    assistantReply
+    assistantReply,
+    architectureState: raw?.architectureState && typeof raw.architectureState === "object"
+      ? raw.architectureState
+      : {}
   };
 };
 
@@ -1289,6 +1699,16 @@ ADDITIONAL BEHAVIOR:
 - If user asks to move to Components section:
   - If unknowns are empty: confirm ideation finalized and direct them to Components section.
   - If unknowns remain: clearly list top missing details instead of generic status text.
+- Besides requirements, maintain an architectureState that captures execution structure:
+  - pattern (example: finite-state-machine)
+  - sourceStrategy (single-sketch or multi-file-modular)
+  - entryFile
+  - files with roles/responsibilities
+  - libraries with purpose
+  - planned pinAssignments when known
+  - runtimeFlow, assumptions, and openDecisions
+- Keep architectureState concrete enough for downstream codegen, but do not turn ideation into a full wiring tutorial.
+- If unknowns are empty, architectureState should read like a deterministic execution blueprint, not a vague suggestion list.
 
 PROCESS (MANDATORY):
 1. Understand user input
@@ -1337,7 +1757,19 @@ OUTPUT STRICT JSON:
   "requirements": [],
   "unknowns": [],
   "question": "",
-  "assistantReply": ""
+  "assistantReply": "",
+  "architectureState": {
+    "summary": "",
+    "pattern": "",
+    "sourceStrategy": "",
+    "entryFile": "sketch.ino",
+    "files": [],
+    "libraries": [],
+    "pinAssignments": [],
+    "runtimeFlow": [],
+    "assumptions": [],
+    "openDecisions": []
+  }
 }
 
 PROJECT DESCRIPTION:
@@ -1345,6 +1777,9 @@ ${project.description}
 
 CURRENT STATE:
 ${JSON.stringify(project.ideaState)}
+
+CURRENT ARCHITECTURE STATE:
+${JSON.stringify(project.architectureState || {})}
 
 CONVERSATION:
 ${messagesText}
@@ -1358,7 +1793,17 @@ ${userInput}
   // #endregion agent log
 
   const text = await callAI(prompt);
-  const parsed = safeParse(text);
+  let parsed;
+  try {
+    parsed = safeParse(text);
+  } catch (error) {
+    console.error("Ideation parse fallback:", error?.message || error);
+    parsed = buildIdeationParseFallback({
+      project,
+      userInput,
+      rawText: text
+    });
+  }
 
   const normalized = normalizeIdeationOutput(parsed, userInput);
   const guarded = applyIdeationGuards(project, userInput, normalized);
@@ -1375,6 +1820,12 @@ ${userInput}
 
   return {
     ...catalogSafe,
+    architectureState: normalizeArchitectureState(catalogSafe.architectureState, {
+      project,
+      summary: catalogSafe.summary,
+      requirements: catalogSafe.requirements,
+      unknowns: catalogSafe.unknowns
+    }),
     detectedMeta: {
       board: detectedBoardKey,
       powerSource: detectPowerSourceFromRequirements(guarded.requirements),
@@ -1402,6 +1853,7 @@ Convert finalized idea into system architecture and components.
 
 RULES:
 - Use ideaState as ground truth
+- Treat existing architectureState as the execution contract; refine it instead of replacing it with a contradictory structure unless the user explicitly changes direction.
 - Use IDEATION CAPTURED META as hard context for board/language/power defaults.
 - Be precise and practical
 - No vague components
@@ -1428,7 +1880,19 @@ OUTPUT STRICT JSON:
   "architecture": "",
   "components": [],
   "apiEndpoints": [],
-  "reply": ""
+  "reply": "",
+  "architectureState": {
+    "summary": "",
+    "pattern": "",
+    "sourceStrategy": "",
+    "entryFile": "sketch.ino",
+    "files": [],
+    "libraries": [],
+    "pinAssignments": [],
+    "runtimeFlow": [],
+    "assumptions": [],
+    "openDecisions": []
+  }
 }
 
 IDEA STATE:
@@ -1436,6 +1900,9 @@ ${JSON.stringify(project.ideaState)}
 
 CURRENT COMPONENT STATE:
 ${JSON.stringify(project.componentsState)}
+
+CURRENT ARCHITECTURE STATE:
+${JSON.stringify(project.architectureState || {})}
 
 IDEATION CAPTURED META:
 ${JSON.stringify({
@@ -1473,11 +1940,11 @@ ${userInput}
 
   try {
     const parsed = safeParse(text);
-    const normalized = normalizeComponentsOutput(parsed, stripThinking(text));
+    const normalized = normalizeComponentsOutput(parsed, project, stripThinking(text));
     return enforceCatalogForComponents(normalized);
   } catch {
     // Keep chat flow alive when model returns plain text instead of strict JSON.
-    const normalized = normalizeComponentsOutput({}, stripThinking(text));
+    const normalized = normalizeComponentsOutput({}, project, stripThinking(text));
     return enforceCatalogForComponents(normalized);
   }
 };
@@ -1682,6 +2149,9 @@ ${project?.description || ""}
 IDEATION STATE:
 ${ideationContext}
 
+ARCHITECTURE STATE:
+${JSON.stringify(project?.architectureState || {})}
+
 COMPONENTS STATE:
 ${componentsContext}
 
@@ -1759,7 +2229,7 @@ ${userPrompt || "Generate best-fit sketch and diagram from the existing project 
   }
 };
 
-const normalizeComponentsOutput = (raw, fallbackReply = "I generated components guidance. Ask a follow-up for exact wiring and expected behavior.") => {
+const normalizeComponentsOutput = (raw, project, fallbackReply = "I generated components guidance. Ask a follow-up for exact wiring and expected behavior.") => {
   const architecture = typeof raw?.architecture === "string" ? raw.architecture.trim() : "";
   const components = cleanArray(raw?.components);
   const apiEndpoints = cleanArray(raw?.apiEndpoints);
@@ -1816,7 +2286,13 @@ const normalizeComponentsOutput = (raw, fallbackReply = "I generated components 
     architecture,
     components,
     apiEndpoints,
-    reply
+    reply,
+    architectureState: normalizeArchitectureState(raw?.architectureState, {
+      project,
+      summary: project?.ideaState?.summary || "",
+      requirements: project?.ideaState?.requirements || [],
+      unknowns: project?.ideaState?.unknowns || []
+    })
   };
 };
 

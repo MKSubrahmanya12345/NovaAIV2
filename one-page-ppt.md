@@ -1,10 +1,10 @@
-# HardCode x Athernex PPT Fill
+# NovaAI x Athernex PPT Fill
 
 This is the same 9-slide plan, just cleaned up so it reads like notes instead of a spreadsheet.
 
 ## 1. Cover
 
-- Title: HardCode
+- Title: NovaAI
 - Tagline: From idea to Wokwi-backed hardware prototype in one continuous loop
 - Subline: AI-guided ideation, circuit/code generation, simulation, and debug
 
@@ -29,7 +29,7 @@ This slide should feel like the friction before the product exists.
 
 ## 4. Solution
 
-- HardCode is a hardware-build ecosystem, not just a chat box
+- NovaAI is a hardware-build ecosystem, not just a chat box
 - It turns natural language into structured project state across ideation, components, and design
 - It generates Wokwi-ready artifacts like diagram.json and sketch.ino
 - It uses live Wokwi context so design decisions match the actual circuit, not a stale guess

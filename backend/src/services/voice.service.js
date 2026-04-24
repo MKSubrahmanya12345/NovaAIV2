@@ -334,10 +334,28 @@ export const synthesizeWithElevenLabs = async ({
     const providerMessage = String(parsed?.detail?.message || attempt.errorText || "Unknown ElevenLabs error").slice(0, 300);
     const providerRequestId = String(parsed?.detail?.request_id || "").trim();
     const requestInfo = providerRequestId ? ` request_id=${providerRequestId}` : "";
+    const providerCode = String(parsed?.detail?.code || "").trim();
 
-    throw new VoiceProviderError(`ElevenLabs TTS failed (${attempt.status})`, {
-      code: "elevenlabs_tts_failed",
-      statusCode: 502,
+    const isAbuseOrAuthBlock = attempt.status === 401 || providerCode === "unauthorized";
+    const isPlanRequired = attempt.status === 402 || providerCode === "paid_plan_required";
+
+    let mappedCode = "elevenlabs_tts_failed";
+    let mappedStatusCode = 502;
+    let mappedMessage = `ElevenLabs TTS failed (${attempt.status})`;
+
+    if (isAbuseOrAuthBlock) {
+      mappedCode = "elevenlabs_tts_blocked";
+      mappedStatusCode = 503;
+      mappedMessage = "ElevenLabs TTS is currently blocked for this API key/account";
+    } else if (isPlanRequired) {
+      mappedCode = "elevenlabs_tts_plan_required";
+      mappedStatusCode = 503;
+      mappedMessage = "ElevenLabs requires a paid plan for this voice/account";
+    }
+
+    throw new VoiceProviderError(mappedMessage, {
+      code: mappedCode,
+      statusCode: mappedStatusCode,
       provider: "elevenlabs",
       details: `${providerMessage}${requestInfo}${voicesLookupDetails ? ` | ${voicesLookupDetails}` : ""}`
     });

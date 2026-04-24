@@ -1,4 +1,4 @@
-# HardCode AI Architecture Notes
+# NovaAI AI Architecture Notes
 
 ## Goal
 Build a future-ready AI pipeline for vibecoding hardware projects where ideation outputs are persisted, reused by downstream agents, and converted into deterministic simulation artifacts.

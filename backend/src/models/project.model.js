@@ -46,6 +46,98 @@ const ideaStateSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const architectureFileSchema = new mongoose.Schema({
+  path: {
+    type: String,
+    default: ""
+  },
+  role: {
+    type: String,
+    default: ""
+  },
+  responsibility: {
+    type: String,
+    default: ""
+  }
+}, { _id: false });
+
+const architectureLibrarySchema = new mongoose.Schema({
+  name: {
+    type: String,
+    default: ""
+  },
+  purpose: {
+    type: String,
+    default: ""
+  }
+}, { _id: false });
+
+const architecturePinSchema = new mongoose.Schema({
+  component: {
+    type: String,
+    default: ""
+  },
+  signal: {
+    type: String,
+    default: ""
+  },
+  boardPin: {
+    type: String,
+    default: ""
+  },
+  notes: {
+    type: String,
+    default: ""
+  }
+}, { _id: false });
+
+const architectureStateSchema = new mongoose.Schema({
+  summary: {
+    type: String,
+    default: ""
+  },
+  pattern: {
+    type: String,
+    default: ""
+  },
+  sourceStrategy: {
+    type: String,
+    default: ""
+  },
+  entryFile: {
+    type: String,
+    default: ""
+  },
+  files: {
+    type: [architectureFileSchema],
+    default: []
+  },
+  libraries: {
+    type: [architectureLibrarySchema],
+    default: []
+  },
+  pinAssignments: {
+    type: [architecturePinSchema],
+    default: []
+  },
+  runtimeFlow: {
+    type: [String],
+    default: []
+  },
+  assumptions: {
+    type: [String],
+    default: []
+  },
+  openDecisions: {
+    type: [String],
+    default: []
+  },
+  updatedAt: {
+    type: Date,
+    default: null
+  }
+}, { _id: false });
+
 // COMPONENTS
 const componentsStateSchema = new mongoose.Schema({
   architecture: {
@@ -230,6 +322,23 @@ const projectSchema = new mongoose.Schema({
       summary: "",
       requirements: [],
       unknowns: []
+    })
+  },
+
+  architectureState: {
+    type: architectureStateSchema,
+    default: () => ({
+      summary: "",
+      pattern: "",
+      sourceStrategy: "",
+      entryFile: "",
+      files: [],
+      libraries: [],
+      pinAssignments: [],
+      runtimeFlow: [],
+      assumptions: [],
+      openDecisions: [],
+      updatedAt: null
     })
   },
 

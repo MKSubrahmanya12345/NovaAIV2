@@ -2,17 +2,20 @@ import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useThemeStore } from "../store/useThemeStore";
+import { useAuthStore } from "../store/useAuthStore";
 import axios from "axios";
 import toast from "react-hot-toast";
 
 import ProjectChat from "../components/ProjectChat";
 import ComponentsChat from "../components/ComponentsChat";
-import WokwiProofLab from "../components/WokwiProofLab";
+import SimulatorWorkbench from "../components/SimulatorWorkbench";
 export default function ProjectMainPage() {
   const [tab, setTab] = useState("ideation");
   const [isIdeationFinalized, setIsIdeationFinalized] = useState(false);
   const [projectSnapshot, setProjectSnapshot] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const { theme, toggleTheme } = useThemeStore();
+  const logout = useAuthStore((state) => state.logout);
   const isDark = theme === "dark";
 
   const navigate = useNavigate();
@@ -87,6 +90,18 @@ export default function ProjectMainPage() {
     }
   };
 
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+      await logout();
+      navigate("/auth");
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
+
   return (
     <div className={`min-h-screen px-6 py-8 ${isDark ? "bg-[#212121] text-[#e5e5e5]" : "bg-[#f5f5f5] text-[#111]"}`}>
       
@@ -131,11 +146,23 @@ export default function ProjectMainPage() {
             >
               {isDark ? "Light" : "Dark"}
             </button>
+
+            <button
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className={`rounded-lg px-4 py-2 text-xs font-semibold border transition ${
+                isDark
+                  ? "border-white/10 text-red-300 hover:bg-white/10"
+                  : "border-black/10 text-red-600 hover:bg-black/5"
+              } ${isLoggingOut ? "cursor-not-allowed opacity-60" : ""}`}
+            >
+              {isLoggingOut ? "Logging out..." : "Logout"}
+            </button>
           </div>
         </div>
 
         <div className={`mb-4 inline-flex rounded-lg p-1 ${isDark ? "bg-[#1f1f1f]" : "bg-[#eaeaea]"}`}>
-          {["ideation", "components", "proof"].map((t) => (
+          {["ideation", "components", "simulator"].map((t) => (
             <button
               key={t}
               onClick={() => handleSelectTab(t)}
@@ -145,7 +172,7 @@ export default function ProjectMainPage() {
                   : ""
               } ${t === "components" && !isIdeationFinalized ? "opacity-60" : ""}`}
             >
-              {t === "ideation" ? "Ideation AI" : t === "components" ? "Components AI" : "Wokwi Proof Lab"}
+              {t === "ideation" ? "Ideation AI" : t === "components" ? "Components AI" : "Simulator AI"}
             </button>
           ))}
         </div>
@@ -181,15 +208,15 @@ export default function ProjectMainPage() {
             </motion.div>
           )}
 
-          {tab === "proof" && (
+          {tab === "simulator" && (
             <motion.div
-              key="proof"
+              key="simulator"
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.2 }}
               className="h-[78vh]"
             >
-              <WokwiProofLab
+              <SimulatorWorkbench
                 projectId={id}
                 projectSnapshot={projectSnapshot}
                 onProjectUpdate={setProjectSnapshot}

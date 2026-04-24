@@ -1,7 +1,7 @@
 {
-  "name": "hardcode",
-  "displayName": "HardCode",
-  "description": "VS Code extension for HardCode",
+  "name": "NovaAI",
+  "displayName": "NovaAI",
+  "description": "VS Code extension for NovaAI",
   "version": "0.0.4",
   "engines": {
     "vscode": "^1.116.0"
@@ -10,14 +10,14 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:hardcode.chatsView",
-    "onCommand:hardcode-vscode-extension.openChat",
-    "onCommand:hardcode.openWorkspace",
-    "onCommand:hardcode-vscode-extension.createWokwiProject",
-    "onCommand:hardcode.openChat",
-    "onCommand:hardcode.createWokwiProject",
-    "onCommand:hardcode.openSimulatorWorkbench",
-    "onCommand:hardcode.selectSimulationPath"
+    "onView:NovaAI.chatsView",
+    "onCommand:NovaAI-vscode-extension.openChat",
+    "onCommand:NovaAI.openWorkspace",
+    "onCommand:NovaAI-vscode-extension.createWokwiProject",
+    "onCommand:NovaAI.openChat",
+    "onCommand:NovaAI.createWokwiProject",
+    "onCommand:NovaAI.openSimulatorWorkbench",
+    "onCommand:NovaAI.selectSimulationPath"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -25,58 +25,58 @@
       "explorer": [
         {
           "type": "webview",
-          "id": "hardcode.chatsView",
-          "name": "HardCode Workspace"
+          "id": "NovaAI.chatsView",
+          "name": "NovaAI Workspace"
         }
       ]
     },
     "commands": [
       {
-        "command": "hardcode-vscode-extension.openChat",
-        "title": "HardCode: Start Chat"
+        "command": "NovaAI-vscode-extension.openChat",
+        "title": "NovaAI: Start Chat"
       },
       {
-        "command": "hardcode.openChat",
-        "title": "HardCode: Start Chat"
+        "command": "NovaAI.openChat",
+        "title": "NovaAI: Start Chat"
       },
       {
-        "command": "hardcode.openWorkspace",
-        "title": "HardCode: Open Workspace"
+        "command": "NovaAI.openWorkspace",
+        "title": "NovaAI: Open Workspace"
       },
       {
-        "command": "hardcode-vscode-extension.createWokwiProject",
-        "title": "HardCode: Create Wokwi Project"
+        "command": "NovaAI-vscode-extension.createWokwiProject",
+        "title": "NovaAI: Create Wokwi Project"
       },
       {
-        "command": "hardcode.createWokwiProject",
-        "title": "HardCode: Create Wokwi Project"
+        "command": "NovaAI.createWokwiProject",
+        "title": "NovaAI: Create Wokwi Project"
       },
       {
-        "command": "hardcode.openSimulatorWorkbench",
-        "title": "HardCode: Open Simulator Workbench"
+        "command": "NovaAI.openSimulatorWorkbench",
+        "title": "NovaAI: Open Simulator Workbench"
       },
       {
-        "command": "hardcode.selectSimulationPath",
-        "title": "HardCode: Select Simulation Path"
+        "command": "NovaAI.selectSimulationPath",
+        "title": "NovaAI: Select Simulation Path"
       }
     ],
     "configuration": {
-      "title": "HardCode",
+      "title": "NovaAI",
       "properties": {
-        "hardcode.wokwiProjectsPath": {
+        "NovaAI.wokwiProjectsPath": {
           "type": "string",
           "default": "",
           "markdownDescription": "Optional absolute path where Wokwi projects are stored. Leave empty to use workspace .wokwi-projects or Documents/WokwiProjects."
         },
-        "hardcode.webAppUrl": {
+        "NovaAI.webAppUrl": {
           "type": "string",
           "default": "http://localhost:5173",
-          "markdownDescription": "HardCode frontend URL embedded in the sidebar chat iframe."
+          "markdownDescription": "NovaAI frontend URL embedded in the sidebar chat iframe."
         },
-        "hardcode.backendUrl": {
+        "NovaAI.backendUrl": {
           "type": "string",
           "default": "http://localhost:5000",
-          "markdownDescription": "HardCode backend base URL shown in sidebar for quick verification."
+          "markdownDescription": "NovaAI backend base URL shown in sidebar for quick verification."
         }
       }
     }

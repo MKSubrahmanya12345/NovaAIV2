@@ -7,6 +7,10 @@ import {
   captureSerialWokwi,
   getWokwiEvidence,
   getLocalWokwiFiles,
+  getWorkbenchTree,
+  readWorkbenchFileContent,
+  getWorkbenchFileStatus,
+  writeWorkbenchFileContent,
   syncCompileRunWokwi,
   getLocalWokwiScreenshot,
   generateCustomChipBlueprint,
@@ -23,6 +27,10 @@ router.post("/wokwi/run", protectRoute, runProjectWokwi);
 router.post("/wokwi/scenario", protectRoute, runScenarioWokwi);
 router.post("/wokwi/serial/capture", protectRoute, captureSerialWokwi);
 router.post("/wokwi/local/files", protectRoute, getLocalWokwiFiles);
+router.post("/wokwi/local/workbench/tree", protectRoute, getWorkbenchTree);
+router.post("/wokwi/local/workbench/file/read", protectRoute, readWorkbenchFileContent);
+router.post("/wokwi/local/workbench/file/status", protectRoute, getWorkbenchFileStatus);
+router.post("/wokwi/local/workbench/file/write", protectRoute, writeWorkbenchFileContent);
 router.post("/wokwi/local/sync-run", protectRoute, syncCompileRunWokwi);
 router.get("/wokwi/local/screenshot/:projectId", protectRoute, getLocalWokwiScreenshot);
 router.post("/wokwi/custom-chip/generate", protectRoute, generateCustomChipBlueprint);

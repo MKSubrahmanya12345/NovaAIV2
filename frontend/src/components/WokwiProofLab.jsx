@@ -3,7 +3,7 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useThemeStore } from "../store/useThemeStore";
 
-const getProofStorageKey = (projectId) => `hardcode:wokwi:prooflab:${projectId}`;
+const getProofStorageKey = (projectId) => `NovaAI:wokwi:prooflab:${projectId}`;
 
 const pretty = (value) => {
   try {
@@ -73,7 +73,7 @@ export default function WokwiProofLab({ projectId, projectSnapshot, onProjectUpd
   const [expectText, setExpectText] = useState("");
   const [failText, setFailText] = useState("");
   const [serialTimeoutMs, setSerialTimeoutMs] = useState(12000);
-  const [diagramText, setDiagramText] = useState("{\n  \"version\": 1,\n  \"author\": \"HardCode\",\n  \"editor\": \"wokwi\",\n  \"parts\": [],\n  \"connections\": []\n}\n");
+  const [diagramText, setDiagramText] = useState("{\n  \"version\": 1,\n  \"author\": \"NovaAI\",\n  \"editor\": \"wokwi\",\n  \"parts\": [],\n  \"connections\": []\n}\n");
   const [sketchText, setSketchText] = useState("void setup() {\n  Serial.begin(115200);\n}\n\nvoid loop() {\n  delay(500);\n}\n");
   const [diagramDirty, setDiagramDirty] = useState(false);
   const [sketchDirty, setSketchDirty] = useState(false);
