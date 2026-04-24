@@ -1,0 +1,31 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon --watch src src/index.js",
+    "test": "node --test",
+    "migrate:board-keys": "node scripts/migrate-board-keys.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "grok-sdk": "^0.0.1-security",
+    "groq": "^5.21.0",
+    "groq-sdk": "^1.1.2",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.4.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
