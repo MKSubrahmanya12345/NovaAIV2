@@ -2,11 +2,7 @@
   "ARDUINO_MEGA": {
     "wokwiType": "wokwi-arduino-mega",
     "attrs": {
-      "led13": { "type": "boolean", "default": false },
-      "ledRX": { "type": "boolean", "default": false },
-      "ledTX": { "type": "boolean", "default": false },
-      "ledPower": { "type": "boolean", "default": false },
-      "resetPressed": { "type": "boolean", "default": false }
+      
     },
     "pins": [
       { "name": "SCL", "signals": [{ "type": "i2c", "role": "SCL" }] },
@@ -372,14 +368,10 @@
   "SEVEN_SEGMENT_1": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "color": { "type": "string", "default": "red" },
-      "offColor": { "type": "string", "default": "#444" },
-      "background": { "type": "string", "default": "black" },
-      "digits": { "type": "number", "default": 1 },
-      "colon": { "type": "boolean", "default": false },
-      "colonValue": { "type": "boolean", "default": false },
-      "pins": { "type": "string", "default": "top" },
-      "values": { "type": "array", "default": [0, 0, 0, 0, 0, 0, 0, 0] }
+      "common": { "type": "string", "default": "anode" },
+      "digits": { "type": "string", "default": "1" },
+      "colon": { "type": "string", "default": "" },
+      "color": { "type": "string", "default": "red" }
     },
     "pins": [
       { "name": "COM.1", "signals": [] },
@@ -398,14 +390,10 @@
   "SEVEN_SEGMENT_2": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "color": { "type": "string", "default": "red" },
-      "offColor": { "type": "string", "default": "#444" },
-      "background": { "type": "string", "default": "black" },
-      "digits": { "type": "number", "default": 2 },
-      "colon": { "type": "boolean", "default": false },
-      "colonValue": { "type": "boolean", "default": false },
-      "pins": { "type": "string", "default": "top" },
-      "values": { "type": "array", "default": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+      "common": { "type": "string", "default": "anode" },
+      "digits": { "type": "string", "default": "2" },
+      "colon": { "type": "string", "default": "" },
+      "color": { "type": "string", "default": "red" }
     },
     "pins": [
       { "name": "DIG1", "signals": [] },
@@ -424,14 +412,10 @@
   "SEVEN_SEGMENT_3": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "color": { "type": "string", "default": "red" },
-      "offColor": { "type": "string", "default": "#444" },
-      "background": { "type": "string", "default": "black" },
-      "digits": { "type": "number", "default": 3 },
-      "colon": { "type": "boolean", "default": false },
-      "colonValue": { "type": "boolean", "default": false },
-      "pins": { "type": "string", "default": "top" },
-      "values": { "type": "array", "default": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+      "common": { "type": "string", "default": "anode" },
+      "digits": { "type": "string", "default": "3" },
+      "colon": { "type": "string", "default": "" },
+      "color": { "type": "string", "default": "red" }
     },
     "pins": [
       { "name": "DIG1", "signals": [] },
@@ -451,14 +435,10 @@
   "SEVEN_SEGMENT_4": {
     "wokwiType": "wokwi-7segment",
     "attrs": {
-      "color": { "type": "string", "default": "red" },
-      "offColor": { "type": "string", "default": "#444" },
-      "background": { "type": "string", "default": "black" },
-      "digits": { "type": "number", "default": 4 },
-      "colon": { "type": "boolean", "default": false },
-      "colonValue": { "type": "boolean", "default": false },
-      "pins": { "type": "string", "default": "top" },
-      "values": { "type": "array", "default": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] }
+      "common": { "type": "string", "default": "anode" },
+      "digits": { "type": "string", "default": "4" },
+      "colon": { "type": "string", "default": "" },
+      "color": { "type": "string", "default": "red" }
     },
     "pins": [
       { "name": "A", "signals": [] },

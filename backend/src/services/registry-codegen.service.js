@@ -179,6 +179,51 @@ const computeLayout = (count) => {
   return { cols, gapX, gapY, startX, startY };
 };
 
+/** Wokwi diagram import: omit simulator/runtime attrs (pressed, xray) and registry defaults; keep only explicit static fields from the plan. */
+const minimalPushbuttonAttrs = (planAttrs) => {
+  const src = planAttrs && typeof planAttrs === "object" ? planAttrs : {};
+  const out = {};
+  if (src.color != null && String(src.color).trim() !== "") out.color = src.color;
+  if (src.key != null && String(src.key).trim() !== "") out.key = src.key;
+  if (src.label != null && String(src.label).trim() !== "") out.label = String(src.label);
+  return out;
+};
+
+/** Wokwi docs: common, digits ("1"–"4"), colon ("" | "1"), optional color. */
+const sevenSegDigitsFromType = (compType) => {
+  const m = String(compType || "").match(/^SEVEN_SEGMENT_([1-4])$/);
+  return m ? m[1] : "1";
+};
+
+const minimalSevenSegmentAttrs = (def, comp) => {
+  const defaults = defaultAttrsFor(def);
+  const planA = comp?.attrs && typeof comp.attrs === "object" ? comp.attrs : {};
+
+  const rawCommon = planA.common ?? planA.commonPin ?? defaults.common;
+  const common = rawCommon === "cathode" || rawCommon === "anode" ? rawCommon : "anode";
+
+  let digits =
+    planA.digits != null && String(planA.digits).trim() !== ""
+      ? String(planA.digits)
+      : String(defaults.digits ?? sevenSegDigitsFromType(comp?.type));
+  if (!/^[1-4]$/.test(digits)) digits = sevenSegDigitsFromType(comp?.type);
+
+  const c = planA.colon;
+  let colonOut = "";
+  if (c === true || String(c) === "1") colonOut = "1";
+  else {
+    const d = defaults.colon;
+    if (d === true || String(d) === "1") colonOut = "1";
+  }
+
+  const colorVal =
+    planA.color != null && String(planA.color).trim() !== "" ? planA.color : defaults.color;
+
+  const out = { common, digits, colon: colonOut };
+  if (colorVal != null && String(colorVal).trim() !== "") out.color = String(colorVal);
+  return out;
+};
+
 const generateParts = (registry, plan) => {
   const items = Array.isArray(plan?.components) ? plan.components : [];
   const { cols, gapX, gapY, startX, startY } = computeLayout(items.length + 1);
@@ -209,21 +254,29 @@ const generateParts = (registry, plan) => {
     }
     const row = Math.floor(idx / cols);
     const col = idx % cols;
+    const isPushbutton = comp.type === "PUSHBUTTON" || comp.type === "PUSHBUTTON_6MM";
+    const isSevenSeg = def.wokwiType === "wokwi-7segment";
+    const attrs = isPushbutton
+      ? minimalPushbuttonAttrs(comp.attrs)
+      : isSevenSeg
+        ? minimalSevenSegmentAttrs(def, comp)
+        : {
+            ...defaultAttrsFor(def),
+            ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
+          };
+
     parts.push({
       type: def.wokwiType,
       id: String(comp.id || `${comp.type.toLowerCase()}${idx + 1}`),
       top: Number.isFinite(comp.top) ? comp.top : startY + row * gapY,
       left: Number.isFinite(comp.left) ? comp.left : startX + col * gapX,
       rotate: Number.isFinite(comp.rotate) ? comp.rotate : undefined,
-      attrs: {
-        ...defaultAttrsFor(def),
-        ...(comp.attrs && typeof comp.attrs === "object" ? comp.attrs : {})
-      }
+      attrs
     });
   });
 
   return parts.map((p) => {
-    const cleaned = { ...p };
+    const cleaned = { ...p, hide: false };
     if (cleaned.rotate === undefined) delete cleaned.rotate;
     return cleaned;
   });
@@ -436,13 +489,81 @@ export const validatePlan = (registry, plan) => {
       }
     }
 
-    const colonEnabled = Boolean(seg?.attrs && typeof seg.attrs === "object" && seg.attrs.colon === true);
+    const attrs = seg?.attrs && typeof seg.attrs === "object" ? seg.attrs : {};
+    const colonOn = attrs.colon === true || String(attrs.colon) === "1";
     const hasCln = hasAnyConnectionToPin("SEVEN_SEGMENT_4", segId, "CLN");
-    if (colonEnabled && !hasCln) {
+    if (colonOn && !hasCln) {
       add(`seven-seg policy: SEVEN_SEGMENT_4 "${segId}" colon=true requires CLN to be wired`);
     }
-    if (!colonEnabled && hasCln) {
+    if (!colonOn && hasCln) {
       add(`seven-seg policy: SEVEN_SEGMENT_4 "${segId}" colon is false/missing, so CLN must not be wired`);
+    }
+  }
+
+  const boardDefForPower = plan.board?.type ? registry[plan.board.type] : null;
+  const boardPinByName = new Map((boardDefForPower?.pins || []).map((p) => [p.name, p]));
+
+  const isBoardGndPin = (pinName) => {
+    if (pinName === "GND" || String(pinName).startsWith("GND.")) return true;
+    const meta = boardPinByName.get(pinName);
+    return Boolean(meta?.signals?.some((s) => s.type === "power" && s.role === "GND"));
+  };
+
+  const isBoard5VPin = (pinName) => {
+    if (pinName === "5V" || String(pinName).startsWith("5V.")) return true;
+    const meta = boardPinByName.get(pinName);
+    return Boolean(
+      meta?.signals?.some((s) => s.type === "power" && s.role === "VCC" && Number(s.voltage) === 5)
+    );
+  };
+
+  const chipPowerWiredToBoard = (chipType, chipId, chipPin, boardPinOk) => {
+    for (const w of wires) {
+      const from = w?.from;
+      const to = w?.to;
+      if (!from || !to) continue;
+      const chipFrom = from.type === chipType && from.id === chipId && from.pin === chipPin;
+      const chipTo = to.type === chipType && to.id === chipId && to.pin === chipPin;
+      if (chipFrom && to.type === plan.board?.type && to.id === plan.board?.id && boardPinOk(to.pin)) return true;
+      if (chipTo && from.type === plan.board?.type && from.id === plan.board?.id && boardPinOk(from.pin)) return true;
+    }
+    return false;
+  };
+
+  const ds1307s = planComponents.filter((c) => c?.type === "DS1307");
+  for (const rtc of ds1307s) {
+    const id = String(rtc?.id || "").trim();
+    if (!id) continue;
+    if (!chipPowerWiredToBoard("DS1307", id, "GND", isBoardGndPin)) {
+      add(`ds1307 policy: DS1307 "${id}" must connect GND to the board GND`);
+    }
+    if (!chipPowerWiredToBoard("DS1307", id, "5V", isBoard5VPin)) {
+      add(`ds1307 policy: DS1307 "${id}" must connect 5V to the board 5V rail`);
+    }
+  }
+
+  const pushbuttonTypes = new Set(["PUSHBUTTON", "PUSHBUTTON_6MM"]);
+  const pushbuttons = planComponents.filter((c) => c?.type && pushbuttonTypes.has(c.type));
+  for (const btn of pushbuttons) {
+    const btnType = btn.type;
+    const btnId = String(btn?.id || "").trim();
+    if (!btnId) continue;
+    const pinsToBoard = new Set();
+    for (const w of wires) {
+      const from = w?.from;
+      const to = w?.to;
+      if (!from || !to) continue;
+      if (from.type === btnType && from.id === btnId && to.type === plan.board?.type && to.id === plan.board?.id) {
+        pinsToBoard.add(from.pin);
+      }
+      if (to.type === btnType && to.id === btnId && from.type === plan.board?.type && from.id === plan.board?.id) {
+        pinsToBoard.add(to.pin);
+      }
+    }
+    if (pinsToBoard.size < 2) {
+      add(
+        `pushbutton policy: ${btnType} "${btnId}" must have at least two distinct pins wired to the board (e.g. input + GND)`
+      );
     }
   }
 
@@ -503,9 +624,11 @@ Component rules (must follow):
   - A4988_DRIVER:VDD -> board 5V / 5V.1 / 5V.2
   - A4988_DRIVER:GND -> board GND.1 / GND.2 / GND.3 / etc.
 - Connect A4988_DRIVER:RESET to A4988_DRIVER:SLEEP (no board pin required).
-- SEVEN_SEGMENT_4 minimum wiring completeness:
-  - If you include a component with type SEVEN_SEGMENT_4, you MUST wire ALL of: DIG1,DIG2,DIG3,DIG4 and segments A,B,C,D,E,F,G and COM.
-  - CLN is OPTIONAL: only wire CLN if attrs.colon is true. If attrs.colon is false/missing, do NOT wire CLN.
+- SEVEN_SEGMENT_4 (Wokwi wokwi-7segment): attrs use registry shape — common "anode"|"cathode", digits "4", colon "" or boolean/string clock mode; diagram attrs follow Wokwi (string digits, colon "" or "1").
+  - Wire ALL of: DIG1,DIG2,DIG3,DIG4 and segments A,B,C,D,E,F,G and COM. Pin COM (not COM.1 for this type). COM MUST appear in connections[] (board GND or 5V per common cathode/anode in COMPONENTS STATE / USER REQUEST).
+  - If attrs.colon is true or "1" (clock/colon on), you MUST wire pin CLN on that display to the board. If colon is false/omitted/"", do NOT wire CLN.
+- DS1307: each DS1307 MUST have pin GND wired to a board GND pin and pin 5V wired to a board 5V rail (5V, 5V.1, 5V.2, etc.).
+- PUSHBUTTON and PUSHBUTTON_6MM: each button MUST have at least two different button pins each wired to the board (typically one to a digital/analog input and one to GND for INPUT_PULLUP sketches).
 
 REGISTRY CONTEXT (compressed):
 ${JSON.stringify(registryContext)}
@@ -547,6 +670,70 @@ ${userPrompt || ""}
 `;
 };
 
+const normalizeParsedPlan = (plan, defaultBoardKey) => {
+  const boardType = plan?.board?.type || defaultBoardKey;
+  const boardId = String(plan?.board?.id || "board");
+  return {
+    ...plan,
+    board: {
+      type: boardType,
+      id: boardId,
+      top: Number.isFinite(plan?.board?.top) ? plan.board.top : 270,
+      left: Number.isFinite(plan?.board?.left) ? plan.board.left : 185,
+      attrs: plan?.board?.attrs && typeof plan.board.attrs === "object" ? plan.board.attrs : {}
+    },
+    components: Array.isArray(plan?.components) ? plan.components : [],
+    connections: Array.isArray(plan?.connections) ? plan.connections : [],
+    notes: Array.isArray(plan?.notes) ? plan.notes.map((n) => String(n)) : []
+  };
+};
+
+const buildRepairPlanPrompt = ({
+  validationErrors,
+  failedPlan,
+  registryContext,
+  defaultBoardKey
+}) => {
+  const errorsText = Array.isArray(validationErrors) ? validationErrors.map((e) => String(e)).join("\n") : String(validationErrors || "");
+  return `
+You are a strict hardware planning assistant. A previous JSON plan failed validation.
+
+Task:
+Return ONE corrected JSON plan that fixes ALL validation errors below. Preserve board.id and component ids where possible. Use only component types and pins from REGISTRY CONTEXT.
+
+Validation errors (must all be resolved):
+${errorsText}
+
+Failed plan (fix this; same OUTPUT SHAPE as before):
+${JSON.stringify(failedPlan)}
+
+Rules (unchanged):
+- Return ONLY valid JSON. No markdown. No prose. No trailing commas. NO COMMENTS.
+- Pins must exist on the component in REGISTRY CONTEXT.
+- SEVEN_SEGMENT_4: wire DIG1-DIG4, A-G, COM; if attrs.colon true or "1" also wire CLN; if colon off do not wire CLN. DS1307: GND+5V to board. Pushbuttons: two board connections per button.
+
+REGISTRY CONTEXT (compressed):
+${JSON.stringify(registryContext)}
+
+OUTPUT SHAPE (STRICT):
+{
+  "board": { "type": "${defaultBoardKey}", "id": "board", "top": 270, "left": 185, "attrs": {} },
+  "components": [
+    { "type": "", "id": "", "attrs": {}, "top": 0, "left": 0, "rotate": 0 }
+  ],
+  "connections": [
+    {
+      "from": { "type": "", "id": "", "pin": "" },
+      "to": { "type": "", "id": "", "pin": "" },
+      "color": "green",
+      "route": []
+    }
+  ],
+  "notes": []
+}
+`;
+};
+
 export async function generateArtifactsFromRegistry({ project, userPrompt = "" }) {
   // Deterministic preset(s): no AI call.
   const promptText = String(userPrompt || "");
@@ -583,26 +770,33 @@ export async function generateArtifactsFromRegistry({ project, userPrompt = "" }
     throw new Error(`AI response parsing failed. Excerpt: ${excerpt || "(empty)"}`);
   }
 
-  // Normalize board defaults if model omitted.
-  const boardType = plan?.board?.type || defaultBoardKey;
-  const boardId = String(plan?.board?.id || "board");
-  const normalizedPlan = {
-    ...plan,
-    board: {
-      type: boardType,
-      id: boardId,
-      top: Number.isFinite(plan?.board?.top) ? plan.board.top : 270,
-      left: Number.isFinite(plan?.board?.left) ? plan.board.left : 185,
-      attrs: plan?.board?.attrs && typeof plan.board.attrs === "object" ? plan.board.attrs : {}
-    },
-    components: Array.isArray(plan?.components) ? plan.components : [],
-    connections: Array.isArray(plan?.connections) ? plan.connections : [],
-    notes: Array.isArray(plan?.notes) ? plan.notes.map((n) => String(n)) : []
-  };
+  let normalizedPlan = normalizeParsedPlan(plan, defaultBoardKey);
+  let validation = validatePlan(registry, normalizedPlan);
 
-  const validation = validatePlan(registry, normalizedPlan);
   if (!validation.ok) {
-    throw new Error(`Plan validation failed: ${validation.errors.join(" | ")}`);
+    console.warn("Plan validation failed; attempting one repair pass:", validation.errors.join(" | "));
+    const repairPrompt = buildRepairPlanPrompt({
+      validationErrors: validation.errors,
+      failedPlan: normalizedPlan,
+      registryContext,
+      defaultBoardKey
+    });
+    const repairRaw = await callAI(repairPrompt);
+    let repairPlan;
+    try {
+      repairPlan = safeParseJson(repairRaw);
+    } catch (repairErr) {
+      const excerpt = String(repairRaw || "").replace(/\s+/g, " ").trim().slice(0, 600);
+      console.error("Plan repair AI raw output (excerpt):", excerpt);
+      throw new Error(
+        `Plan validation failed: ${validation.errors.join(" | ")} | Repair response parsing failed: ${excerpt || "(empty)"}`
+      );
+    }
+    normalizedPlan = normalizeParsedPlan(repairPlan, defaultBoardKey);
+    validation = validatePlan(registry, normalizedPlan);
+    if (!validation.ok) {
+      throw new Error(`Plan validation failed: ${validation.errors.join(" | ")}`);
+    }
   }
 
   // Generate diagram from plan + registry.
@@ -731,8 +925,7 @@ ${loopDirFlip ? `\n${loopDirFlip}\n` : ""}
       author: "NovaAI AI",
       editor: "wokwi",
       parts,
-      connections,
-      dependencies: {}
+      connections
     },
     notes: [
       ...normalizedPlan.notes,

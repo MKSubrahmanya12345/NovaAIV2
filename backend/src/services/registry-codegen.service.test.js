@@ -194,7 +194,30 @@ test("validatePlan: accepts SEVEN_SEGMENT_4 when minimum wiring is present (colo
   assert.equal(result.ok, true);
 });
 
-test("validatePlan: enforces CLN wiring only when colon is enabled", () => {
+test("validatePlan: rejects SEVEN_SEGMENT_4 colon=true when CLN is not wired", () => {
+  const registry = getRegistry();
+
+  const requiredPins = ["DIG1", "DIG2", "DIG3", "DIG4", "A", "B", "C", "D", "E", "F", "G", "COM"];
+  const connections = requiredPins.map((pin, idx) => ({
+    from: { type: "ARDUINO_MEGA", id: "board", pin: String(22 + idx) },
+    to: { type: "SEVEN_SEGMENT_4", id: "display", pin },
+    color: "green",
+    route: []
+  }));
+
+  const planColonOn = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "SEVEN_SEGMENT_4", id: "display", attrs: { colon: true } }],
+    connections,
+    notes: []
+  };
+
+  const bad = validatePlan(registry, planColonOn);
+  assert.equal(bad.ok, false);
+  assert.ok(bad.errors.some((e) => e.includes("colon=true requires CLN")));
+});
+
+test("validatePlan: accepts SEVEN_SEGMENT_4 colon=true when CLN is wired", () => {
   const registry = getRegistry();
 
   const requiredPins = ["DIG1", "DIG2", "DIG3", "DIG4", "A", "B", "C", "D", "E", "F", "G", "COM", "CLN"];
@@ -212,17 +235,123 @@ test("validatePlan: enforces CLN wiring only when colon is enabled", () => {
     notes: []
   };
 
-  const ok1 = validatePlan(registry, planColonOn);
-  assert.equal(ok1.ok, true);
+  assert.equal(validatePlan(registry, planColonOn).ok, true);
+});
 
-  const planColonOffButWired = {
-    ...planColonOn,
-    components: [{ type: "SEVEN_SEGMENT_4", id: "display", attrs: { colon: false } }]
+test("validatePlan: rejects SEVEN_SEGMENT_4 CLN wired when colon is off", () => {
+  const registry = getRegistry();
+
+  const requiredPins = ["DIG1", "DIG2", "DIG3", "DIG4", "A", "B", "C", "D", "E", "F", "G", "COM", "CLN"];
+  const connections = requiredPins.map((pin, idx) => ({
+    from: { type: "ARDUINO_MEGA", id: "board", pin: String(22 + idx) },
+    to: { type: "SEVEN_SEGMENT_4", id: "display", pin },
+    color: "green",
+    route: []
+  }));
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "SEVEN_SEGMENT_4", id: "display", attrs: { colon: false } }],
+    connections,
+    notes: []
   };
 
-  const bad = validatePlan(registry, planColonOffButWired);
-  assert.equal(bad.ok, false);
-  assert.ok(bad.errors.some((e) => e.includes("CLN must not be wired")));
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("CLN must not be wired")));
+});
+
+test("validatePlan: rejects invalid pin on SEVEN_SEGMENT_4", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "SEVEN_SEGMENT_4", id: "seg", attrs: { colon: false } }],
+    connections: [
+      {
+        from: { type: "SEVEN_SEGMENT_4", id: "seg", pin: "NOT_A_PIN" },
+        to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" },
+        color: "black",
+        route: []
+      }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('Invalid pin "NOT_A_PIN"')));
+});
+
+test("validatePlan: rejects DS1307 without power to board", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "DS1307", id: "clock", attrs: {} }],
+    connections: [
+      { from: { type: "DS1307", id: "clock", pin: "SDA" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "20" }, color: "green", route: [] },
+      { from: { type: "DS1307", id: "clock", pin: "SCL" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "21" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes('ds1307 policy')));
+});
+
+test("validatePlan: accepts DS1307 with I2C and power", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "DS1307", id: "clock", attrs: {} }],
+    connections: [
+      { from: { type: "DS1307", id: "clock", pin: "SDA" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "20" }, color: "green", route: [] },
+      { from: { type: "DS1307", id: "clock", pin: "SCL" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "21" }, color: "green", route: [] },
+      { from: { type: "DS1307", id: "clock", pin: "GND" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" }, color: "black", route: [] },
+      { from: { type: "DS1307", id: "clock", pin: "5V" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "5V" }, color: "red", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
+});
+
+test("validatePlan: rejects pushbutton with only one board connection", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "PUSHBUTTON", id: "btn", attrs: {} }],
+    connections: [
+      { from: { type: "PUSHBUTTON", id: "btn", pin: "1.l" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "A0" }, color: "green", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((e) => e.includes("pushbutton policy")));
+});
+
+test("validatePlan: accepts pushbutton with two board connections", () => {
+  const registry = getRegistry();
+
+  const plan = {
+    board: { type: "ARDUINO_MEGA", id: "board", top: 270, left: 185, attrs: {} },
+    components: [{ type: "PUSHBUTTON", id: "btn", attrs: {} }],
+    connections: [
+      { from: { type: "PUSHBUTTON", id: "btn", pin: "1.l" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "A0" }, color: "green", route: [] },
+      { from: { type: "PUSHBUTTON", id: "btn", pin: "1.r" }, to: { type: "ARDUINO_MEGA", id: "board", pin: "GND.1" }, color: "black", route: [] }
+    ],
+    notes: []
+  };
+
+  const result = validatePlan(registry, plan);
+  assert.equal(result.ok, true);
 });
 
 test("generateArtifactsFromRegistry: emits runnable stepper sketch when wired to numeric pins", async () => {
