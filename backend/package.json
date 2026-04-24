@@ -4,7 +4,9 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon --watch src src/index.js"
+    "dev": "nodemon --watch src src/index.js",
+    "test": "node --test",
+    "migrate:board-keys": "node scripts/migrate-board-keys.js"
   },
   "keywords": [],
   "author": "",

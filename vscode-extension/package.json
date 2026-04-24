@@ -12,6 +12,7 @@
   "activationEvents": [
     "onView:hardcode.chatsView",
     "onCommand:hardcode-vscode-extension.openChat",
+    "onCommand:hardcode.openWorkspace",
     "onCommand:hardcode-vscode-extension.createWokwiProject",
     "onCommand:hardcode.openChat",
     "onCommand:hardcode.createWokwiProject",
@@ -25,7 +26,7 @@
         {
           "type": "webview",
           "id": "hardcode.chatsView",
-          "name": "HARDCODE CHATS"
+          "name": "HardCode Workspace"
         }
       ]
     },
@@ -37,6 +38,10 @@
       {
         "command": "hardcode.openChat",
         "title": "HardCode: Start Chat"
+      },
+      {
+        "command": "hardcode.openWorkspace",
+        "title": "HardCode: Open Workspace"
       },
       {
         "command": "hardcode-vscode-extension.createWokwiProject",

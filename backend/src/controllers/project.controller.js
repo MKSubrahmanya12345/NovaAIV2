@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import Project from "../models/project.model.js";
-import { processInput } from "../services/ai.services.js";
+import { buildGenerationProfileFromMeta, processInput } from "../services/ai.services.js";
 
 const isIdeaFinalized = (project) => {
   return Boolean(project?.ideaState?.summary?.trim()) && (project?.ideaState?.unknowns?.length ?? 0) === 0;
@@ -39,6 +39,7 @@ export const createProject = async (req, res) => {
     };
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
+    project.generationProfile = buildGenerationProfileFromMeta(project.meta || {});
 
     project.messages.push({
       role: "ai",
@@ -50,7 +51,8 @@ export const createProject = async (req, res) => {
     res.json({
       projectId: project._id,
       reply: ai.question,
-      ideaState: project.ideaState
+      ideaState: project.ideaState,
+      generationProfile: project.generationProfile
     });
 
   } catch (err) {
@@ -268,6 +270,7 @@ export const chatProject = async (req, res) => {
     };
 
     project.meta.stage = isIdeaFinalized(project) ? "components" : "idea";
+    project.generationProfile = buildGenerationProfileFromMeta(project.meta || {});
 
     project.messages.push({
       role: "ai",
@@ -278,7 +281,8 @@ export const chatProject = async (req, res) => {
 
     res.json({
       reply: ai.question,
-      ideaState: project.ideaState
+      ideaState: project.ideaState,
+      generationProfile: project.generationProfile
     });
 
   } catch (err) {

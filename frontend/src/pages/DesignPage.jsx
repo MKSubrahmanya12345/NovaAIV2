@@ -4,9 +4,8 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useThemeStore } from "../store/useThemeStore";
 import DesignChat from "../components/DesignChat";
+import WokwiSimulator from "../components/WokwiSimulator";
 import useVoiceGuidance from "../hooks/useVoiceGuidance";
-
-const defaultWokwiUrl = "";
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -15,8 +14,137 @@ const getInitialProject = (locationState) => {
 };
 
 const getDraftStorageKey = (projectId) => `hardcode:design:draft:${projectId}`;
-const getWokwiUrlStorageKey = (projectId) => `hardcode:design:wokwi-url:${projectId}`;
 const getVoiceStorageKey = (projectId) => `hardcode:design:voice:${projectId}`;
+
+const SIM_TEST_CASES = [
+  {
+    id: "blink-led",
+    name: "Blink LED (UNO D13)",
+    sketchCode: `void setup() {
+  pinMode(13, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(13, HIGH);
+  delay(350);
+  digitalWrite(13, LOW);
+  delay(350);
+}
+`,
+    diagramJson: {
+      version: 1,
+      author: "HardCode",
+      editor: "wokwi",
+      parts: [
+        { id: "uno", type: "wokwi-arduino-uno", x: 80, y: 120 },
+        { id: "led1", type: "wokwi-led", x: 340, y: 150 }
+      ],
+      connections: [
+        ["uno:13", "led1:A", "#ef4444", []],
+        ["uno:GND", "led1:C", "#94a3b8", []]
+      ],
+      dependencies: {}
+    }
+  },
+  {
+    id: "counter-7seg",
+    name: "7-Segment Counter",
+    sketchCode: `const int segPins[8] = {2,3,4,5,6,7,8,9};
+
+const byte digits[10][8] = {
+  {1,1,1,1,1,1,0,0},
+  {0,1,1,0,0,0,0,0},
+  {1,1,0,1,1,0,1,0},
+  {1,1,1,1,0,0,1,0},
+  {0,1,1,0,0,1,1,0},
+  {1,0,1,1,0,1,1,0},
+  {1,0,1,1,1,1,1,0},
+  {1,1,1,0,0,0,0,0},
+  {1,1,1,1,1,1,1,0},
+  {1,1,1,1,0,1,1,0}
+};
+
+void setup() {
+  for (int i = 0; i < 8; i++) pinMode(segPins[i], OUTPUT);
+}
+
+void showDigit(int n) {
+  for (int i = 0; i < 8; i++) {
+    digitalWrite(segPins[i], digits[n][i] ? HIGH : LOW);
+  }
+}
+
+void loop() {
+  for (int i = 0; i < 10; i++) {
+    showDigit(i);
+    delay(500);
+  }
+}
+`,
+    diagramJson: {
+      version: 1,
+      author: "HardCode",
+      editor: "wokwi",
+      parts: [
+        { id: "uno", type: "wokwi-arduino-uno", x: 70, y: 120 },
+        { id: "seg1", type: "wokwi-7segment", x: 360, y: 120 }
+      ],
+      connections: [
+        ["uno:2", "seg1:A", "#22c55e", []],
+        ["uno:3", "seg1:B", "#22c55e", []],
+        ["uno:4", "seg1:C", "#22c55e", []],
+        ["uno:5", "seg1:D", "#22c55e", []],
+        ["uno:6", "seg1:E", "#22c55e", []],
+        ["uno:7", "seg1:F", "#22c55e", []],
+        ["uno:8", "seg1:G", "#22c55e", []],
+        ["uno:9", "seg1:DP", "#22c55e", []],
+        ["uno:GND", "seg1:COM", "#94a3b8", []]
+      ],
+      dependencies: {}
+    }
+  },
+  {
+    id: "servo-button",
+    name: "Servo + Button",
+    sketchCode: `#include <Servo.h>
+
+Servo s;
+const int btnPin = 2;
+
+void setup() {
+  pinMode(btnPin, INPUT_PULLUP);
+  s.attach(9);
+}
+
+void loop() {
+  if (digitalRead(btnPin) == LOW) {
+    s.write(165);
+  } else {
+    s.write(20);
+  }
+  delay(60);
+}
+`,
+    diagramJson: {
+      version: 1,
+      author: "HardCode",
+      editor: "wokwi",
+      parts: [
+        { id: "uno", type: "wokwi-arduino-uno", x: 70, y: 130 },
+        { id: "servo1", type: "wokwi-servo", x: 330, y: 120 },
+        { id: "btn1", type: "wokwi-pushbutton", x: 330, y: 270 }
+      ],
+      connections: [
+        ["uno:9", "servo1:SIGNAL", "#60a5fa", []],
+        ["uno:5V", "servo1:VCC", "#f97316", []],
+        ["uno:GND", "servo1:GND", "#94a3b8", []],
+        ["uno:2", "btn1:1", "#22c55e", []],
+        ["uno:GND", "btn1:2", "#94a3b8", []]
+      ],
+      dependencies: {}
+    }
+  }
+];
 
 export default function DesignPage() {
   const { id } = useParams();
@@ -37,18 +165,21 @@ export default function DesignPage() {
   const [leftPanelWidth, setLeftPanelWidth] = useState(58);
   const [wokwiContext, setWokwiContext] = useState({ connected: false, reason: "No live circuit context" });
   const [draftRestored, setDraftRestored] = useState(false);
-  const [wokwiUrlFallback, setWokwiUrlFallback] = useState("");
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [speechRate, setSpeechRate] = useState(0.9);
   const [handsFreeMode, setHandsFreeMode] = useState(false);
   const [localRunLoading, setLocalRunLoading] = useState(false);
   const [useLocalPreview, setUseLocalPreview] = useState(true);
   const [localScreenshotUrl, setLocalScreenshotUrl] = useState("");
+  const [hexCode, setHexCode] = useState("");
+  const [compiledDiagram, setCompiledDiagram] = useState(null);
+  const [compileLoading, setCompileLoading] = useState(false);
+  const [selectedTestCaseId, setSelectedTestCaseId] = useState(SIM_TEST_CASES[0].id);
+  const [compiledSketchCode, setCompiledSketchCode] = useState("");
 
   const designState = project?.designState || {};
   const ideaState = project?.ideaState || {};
   const componentsState = project?.componentsState || {};
-  const wokwiUrl = project?.wokwiUrl || project?.designState?.wokwiUrl || wokwiUrlFallback || defaultWokwiUrl;
 
   const {
     isVoiceSupported,
@@ -98,33 +229,6 @@ export default function DesignPage() {
       toast.error(payload.message || "Voice guidance error");
     }
   });
-
-  useEffect(() => {
-    if (!id) return;
-
-    try {
-      const cachedUrl = localStorage.getItem(getWokwiUrlStorageKey(id));
-      if (cachedUrl && cachedUrl.trim()) {
-        setWokwiUrlFallback(cachedUrl.trim());
-      }
-    } catch {
-      // Ignore localStorage errors.
-    }
-  }, [id]);
-
-  useEffect(() => {
-    if (!id) return;
-
-    const nextUrl = (project?.wokwiUrl || project?.designState?.wokwiUrl || "").trim();
-    if (!nextUrl) return;
-
-    try {
-      localStorage.setItem(getWokwiUrlStorageKey(id), nextUrl);
-      setWokwiUrlFallback(nextUrl);
-    } catch {
-      // Ignore localStorage errors.
-    }
-  }, [id, project?.wokwiUrl, project?.designState?.wokwiUrl]);
 
   useEffect(() => {
     if (!id) return;
@@ -432,47 +536,69 @@ export default function DesignPage() {
     document.body.style.userSelect = "none";
   };
 
-  const handleSetWokwiUrl = async () => {
-    const currentUrl = project?.wokwiUrl || "https://wokwi.com/projects/328451800839488084";
-    const inputValue = window.prompt("Paste Wokwi project URL", currentUrl);
-
-    if (inputValue === null) return;
-
-    const nextUrl = inputValue.trim();
+  const handleCompileToHex = async () => {
+    if (!id || compileLoading) return;
 
     try {
-      const res = await axios.put(
-        `http://localhost:5000/api/project/${id}`,
-        { wokwiUrl: nextUrl },
+      setCompileLoading(true);
+
+      // Prefer latest generated content, fallback to selected built-in test case.
+      let sketchCode = componentsState?.generatedSketch || "";
+      let diagramJson = componentsState?.generatedDiagram || {};
+
+      if (!sketchCode) {
+        const selectedCase = SIM_TEST_CASES.find((testCase) => testCase.id === selectedTestCaseId) || SIM_TEST_CASES[0];
+        sketchCode = selectedCase.sketchCode;
+        diagramJson = selectedCase.diagramJson;
+        toast.success(`Using built-in test case: ${selectedCase.name}`);
+      }
+
+      // Compile sketch to hex
+      const compileRes = await axios.post(
+        "http://localhost:5000/api/compile/sketch",
+        {
+          projectId: id,
+          sketchCode,
+          fqbn: "arduino:avr:uno"
+        },
         { withCredentials: true }
       );
 
-      setProject(res.data);
-      setWokwiUrlFallback(nextUrl);
+      const compiledHex = compileRes.data?.hexCode || "";
+      if (!compiledHex) {
+        toast.error("Compilation succeeded but no hex code returned");
+        return;
+      }
 
-      try {
-        if (nextUrl) {
-          localStorage.setItem(getWokwiUrlStorageKey(id), nextUrl);
-        } else {
-          localStorage.removeItem(getWokwiUrlStorageKey(id));
+      setHexCode(compiledHex);
+      setCompiledDiagram(diagramJson);
+      setCompiledSketchCode(sketchCode);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          content: `✅ Sketch compiled successfully to hex (${(compiledHex.length / 1024).toFixed(1)} KB)`
         }
-      } catch {
-        // Ignore localStorage errors.
-      }
+      ]);
 
-      const contextRes = await axios.get(
-        `http://localhost:5000/api/design/context/${id}`,
-        { withCredentials: true }
-      );
-
-      if (contextRes.data?.wokwiContext) {
-        setWokwiContext(contextRes.data.wokwiContext);
-      }
-
-      toast.success(nextUrl ? "Wokwi URL saved" : "Wokwi URL cleared");
+      toast.success("Sketch compiled to hex");
     } catch (err) {
-      console.error("Save Wokwi URL Error:", err);
-      toast.error(err?.response?.data?.error || "Failed to save Wokwi URL");
+      const message =
+        err?.response?.data?.error ||
+        err?.response?.data?.compileResult?.summary ||
+        err?.message ||
+        "Compilation failed";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          content: `❌ Compilation failed: ${message}`
+        }
+      ]);
+      toast.error(message);
+    } finally {
+      setCompileLoading(false);
     }
   };
 
@@ -593,7 +719,7 @@ export default function DesignPage() {
             </button>
             <h1 className="mt-2 text-2xl font-semibold">Design AI</h1>
             <p className={`mt-1 text-sm ${isDark ? "text-[#a3a3a3]" : "text-[#555]"}`}>
-              Design-only workspace with Wokwi on the right and AI guidance on the left.
+              Design-only workspace with custom hardware visualization on the right and AI guidance on the left.
             </p>
             {draftRestored && (
               <p className={`mt-1 text-xs font-semibold ${isDark ? "text-green-400" : "text-green-700"}`}>
@@ -603,38 +729,51 @@ export default function DesignPage() {
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleSetWokwiUrl}
-              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
+            <select
+              value={selectedTestCaseId}
+              onChange={(event) => setSelectedTestCaseId(event.target.value)}
+              className={`border px-2 py-2 text-xs font-semibold ${isDark ? "border-white/10 bg-[#2a2a2a] text-[#e5e5e5]" : "border-black/10 bg-white text-[#111]"}`}
             >
-              Set Wokwi URL
+              {SIM_TEST_CASES.map((testCase) => (
+                <option key={testCase.id} value={testCase.id}>
+                  {testCase.name}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={handleCompileToHex}
+              disabled={compileLoading || loading}
+              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? 'bg-blue-700 hover:bg-blue-600' : 'bg-blue-600 text-white hover:bg-blue-700'} ${(compileLoading || loading) ? 'cursor-not-allowed opacity-60' : ''}`}
+            >
+              {compileLoading ? 'Compiling...' : 'Compile to Hex'}
             </button>
 
             <button
               onClick={handleLocalCompileRun}
               disabled={localRunLoading || loading}
-              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? "bg-emerald-700 hover:bg-emerald-600" : "bg-emerald-600 text-white hover:bg-emerald-700"} ${(localRunLoading || loading) ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? 'bg-emerald-700 hover:bg-emerald-600' : 'bg-emerald-600 text-white hover:bg-emerald-700'} ${(localRunLoading || loading) ? 'cursor-not-allowed opacity-60' : ''}`}
             >
               {localRunLoading ? "Running Local..." : "Run Local Build"}
             </button>
 
             <button
               onClick={() => setUseLocalPreview((prev) => !prev)}
-              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
+              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? 'border-white/10 hover:bg-white/10' : 'border-black/10 hover:bg-black/5'}`}
             >
-              {useLocalPreview ? "Show Wokwi URL" : "Show Local Preview"}
+              {useLocalPreview ? "Show Local Screenshot" : "Show Custom Visualizer"}
             </button>
 
             <button
               onClick={handleDebug}
               disabled={loading}
-              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? "bg-[#3a3a3a] hover:bg-[#4a4a4a]" : "bg-black text-white hover:bg-[#222]"} ${loading ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`px-4 py-2 text-xs font-semibold transition ${isDark ? 'bg-[#3a3a3a] hover:bg-[#4a4a4a]' : 'bg-black text-white hover:bg-[#222]'} ${loading ? "cursor-not-allowed opacity-60" : ""}`}
             >
               Debug Design
             </button>
             <button
               onClick={toggleTheme}
-              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? "border-white/10 hover:bg-white/10" : "border-black/10 hover:bg-black/5"}`}
+              className={`border px-4 py-2 text-xs font-semibold transition ${isDark ? 'border-white/10 hover:bg-white/10' : 'border-black/10 hover:bg-black/5'}`}
             >
               {isDark ? "Light" : "Dark"}
             </button>
@@ -649,13 +788,22 @@ export default function DesignPage() {
             <div className={`flex h-full min-h-0 flex-col overflow-hidden ${isDark ? "bg-[#2a2a2a]" : "bg-white"}`}>
               <div className={`border-b px-4 py-3 ${isDark ? "border-white/10" : "border-black/10"}`}>
                 <p className={`text-xs font-semibold uppercase tracking-[0.22em] ${isDark ? "text-[#a3a3a3]" : "text-[#666]"}`}>
-                  Wokwi
+                  {hexCode ? "Live Custom Visualizer" : "Visualizer Preview"}
                 </p>
-                <h2 className="mt-1 text-base font-semibold">Simulator / layout view</h2>
+                <h2 className="mt-1 text-base font-semibold">{hexCode ? "Embedded AVR8js + custom component renderer" : "Simulation / layout view"}</h2>
               </div>
 
-              <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e] p-2">
-                {useLocalPreview && localScreenshotUrl ? (
+              {hexCode && compiledDiagram ? (
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <WokwiSimulator
+                    hexCode={hexCode}
+                    diagramJson={compiledDiagram}
+                    sketchCode={compiledSketchCode || componentsState?.generatedSketch || ""}
+                    projectId={id}
+                  />
+                </div>
+              ) : useLocalPreview && localScreenshotUrl ? (
+                <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e] p-2">
                   <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black">
                     <img
                       alt="Local simulation preview"
@@ -663,28 +811,24 @@ export default function DesignPage() {
                       className="max-h-full max-w-full object-contain"
                     />
                   </div>
-                ) : useLocalPreview ? (
+                </div>
+              ) : useLocalPreview ? (
+                <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e] p-2">
                   <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black px-6 text-center">
                     <p className="text-sm text-white/70">
-                      Local preview mode is active. Click Run Local Build to generate an updated preview,
-                      or switch to Show Wokwi URL if you want to open the cloud simulator.
+                      Click "Compile to Hex" to run generated files, or pick a built-in test case from the dropdown and compile.
                     </p>
                   </div>
-                ) : wokwiUrl ? (
-                  <iframe
-                    title="Wokwi simulator"
-                    src={wokwiUrl}
-                    className="h-full min-h-0 w-full flex-1 border border-white/10 bg-black"
-                    allow="clipboard-read; clipboard-write; fullscreen"
-                  />
-                ) : (
-                  <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black px-6 text-center">
+                </div>
+              ) : (
+                <div className="flex min-h-0 flex-1 flex-col bg-[#1e1e1e] p-2">
+                  <div className="flex h-full min-h-0 w-full flex-1 items-center justify-center border border-white/10 bg-black px-6 text-center rounded-lg">
                     <p className="text-sm text-white/70">
-                      No Wokwi project link is connected yet.
+                      Compile to Hex to run the custom visualizer, or run local build for a screenshot.
                     </p>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </section>
 

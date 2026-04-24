@@ -1,0 +1,110 @@
+[
+  {
+    "id": "wokwi-arduino-uno",
+    "name": "Arduino Uno",
+    "partType": "wokwi-arduino-uno",
+    "category": "board",
+    "pins": ["5V", "GND", "A0", "A1", "A2", "A3", "A4", "A5", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "D9", "D10", "D11", "D12", "D13"],
+    "notes": "Default 5V Arduino board for basic Wokwi projects.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-esp32-devkit-v1",
+    "name": "ESP32 DevKit V1",
+    "partType": "wokwi-esp32-devkit-v1",
+    "category": "board",
+    "pins": ["3V3", "GND", "GPIO0", "GPIO2", "GPIO4", "GPIO5", "GPIO12", "GPIO13", "GPIO14", "GPIO15", "GPIO16", "GPIO17"],
+    "notes": "Useful for Wi-Fi and higher performance projects.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-pi-pico",
+    "name": "Raspberry Pi Pico",
+    "partType": "wokwi-pi-pico",
+    "category": "board",
+    "pins": ["3V3", "GND", "GP0", "GP1", "GP2", "GP3", "GP4", "GP5", "GP6", "GP7"],
+    "notes": "Compact RP2040 board for MicroPython or C/C++ projects.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-led",
+    "name": "LED",
+    "partType": "wokwi-led",
+    "category": "output",
+    "pins": ["A", "C"],
+    "notes": "Basic indicator LED, available in multiple colors.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-resistor",
+    "name": "Resistor",
+    "partType": "wokwi-resistor",
+    "category": "passive",
+    "pins": ["1", "2"],
+    "notes": "Use for pull-up, pull-down, and current limiting.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-pushbutton",
+    "name": "Pushbutton",
+    "partType": "wokwi-pushbutton",
+    "category": "input",
+    "pins": ["1", "2"],
+    "notes": "Momentary button used for user input.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-buzzer",
+    "name": "Buzzer",
+    "partType": "wokwi-buzzer",
+    "category": "output",
+    "pins": ["1", "2"],
+    "notes": "Simple audio output component.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-lcd1602",
+    "name": "LCD 16x2",
+    "partType": "wokwi-lcd1602",
+    "category": "display",
+    "pins": ["VCC", "GND", "SDA", "SCL"],
+    "notes": "Common text display for sensor and menu projects.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-74hc595",
+    "name": "74HC595 Shift Register",
+    "partType": "wokwi-74hc595",
+    "category": "logic",
+    "pins": ["DS", "SHCP", "STCP", "Q0", "Q1", "Q2", "Q3", "Q4", "Q5", "Q6", "Q7", "VCC", "GND"],
+    "notes": "Useful for multiplexing displays and expanding outputs.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-7segment",
+    "name": "7 Segment Display",
+    "partType": "wokwi-7segment",
+    "category": "display",
+    "pins": ["A", "B", "C", "D", "E", "F", "G", "COM"],
+    "notes": "Single digit display used in counters and score boards.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-pir-motion-sensor",
+    "name": "PIR Motion Sensor",
+    "partType": "wokwi-pir-motion-sensor",
+    "category": "sensor",
+    "pins": ["+", "-", "D"],
+    "notes": "Motion detection sensor for presence-triggered projects.",
+    "wokwiCompatible": true
+  },
+  {
+    "id": "wokwi-dht22",
+    "name": "DHT22",
+    "partType": "wokwi-dht22",
+    "category": "sensor",
+    "pins": ["VCC", "GND", "DATA"],
+    "notes": "Temperature and humidity sensor.",
+    "wokwiCompatible": true
+  }
+]

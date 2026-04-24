@@ -2,6 +2,7 @@ import * as os from 'os';
 import * as path from 'path';
 import { promises as fs } from 'fs';
 import * as vscode from 'vscode';
+import { HardcodeWorkspaceViewProvider } from './workspace-panel';
 
 type WokwiTemplate = 'arduino-uno' | 'esp32-devkit-v1' | 'raspberry-pi-pico';
 
@@ -24,11 +25,12 @@ const DEFAULT_TEMPLATE: WokwiTemplate = 'arduino-uno';
 const WOKWI_BASE_URL = 'https://wokwi.com/projects/new';
 
 export function activate(context: vscode.ExtensionContext) {
+	const workspaceProvider = new HardcodeWorkspaceViewProvider(context);
 	const provider = new WokwiProjectsViewProvider(context);
 	const simulatorPanel = new HardcodeSimulatorPanel(context);
 
 	context.subscriptions.push(
-		vscode.window.registerWebviewViewProvider('hardcode.chatsView', provider)
+		vscode.window.registerWebviewViewProvider('hardcode.chatsView', workspaceProvider)
 	);
 
 	context.subscriptions.push(
@@ -39,6 +41,12 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand('hardcode.openChat', async () => {
+			await vscode.commands.executeCommand('hardcode.chatsView.focus');
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand('hardcode.openWorkspace', async () => {
 			await vscode.commands.executeCommand('hardcode.chatsView.focus');
 		})
 	);

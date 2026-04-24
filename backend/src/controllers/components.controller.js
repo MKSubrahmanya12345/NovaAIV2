@@ -1,5 +1,6 @@
 import Project from "../models/project.model.js";
 import { processComponents } from "../services/ai.services.js";
+import { generateArtifactsFromRegistry } from "../services/registry-codegen.service.js";
 
 const isIdeaFinalized = (project) => {
   return Boolean(project?.ideaState?.summary?.trim()) && (project?.ideaState?.unknowns?.length ?? 0) === 0;
@@ -59,7 +60,8 @@ export const initComponents = async (req, res) => {
 
     res.json({
       reply: ai.reply,
-      componentsState: project.componentsState
+      componentsState: project.componentsState,
+      generationProfile: project.generationProfile || null
     });
 
   } catch (err) {
@@ -116,11 +118,47 @@ export const chatComponents = async (req, res) => {
 
     res.json({
       reply: ai.reply,
-      componentsState: project.componentsState
+      componentsState: project.componentsState,
+      generationProfile: project.generationProfile || null
     });
 
   } catch (err) {
     console.error("PROJECT ERROR:", err);
     res.status(500).json({ error: err.message });
+  }
+};
+
+/*
+GENERATE WOKWI FILES FROM IDEATION + COMPONENTS STATE
+*/
+export const generateWokwiFilesFromAI = async (req, res) => {
+  try {
+    const { projectId, userPrompt = "" } = req.body;
+
+    const project = await Project.findById(projectId);
+    if (!project) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    if (project.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    if (!canStartComponents(project)) {
+      return res.status(400).json({
+        error: "Finalize Ideation AI before generating Wokwi files"
+      });
+    }
+
+    const generated = await generateArtifactsFromRegistry({ project, userPrompt });
+
+    res.json({
+      projectId,
+      generated,
+      generationProfile: project.generationProfile || null
+    });
+  } catch (err) {
+    console.error("GENERATE WOKWI FILES ERROR:", err);
+    res.status(500).json({ error: err.message || "Failed to generate Wokwi files" });
   }
 };
