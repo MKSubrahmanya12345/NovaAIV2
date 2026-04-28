@@ -1,0 +1,43 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Build output
+dist/
+frontend/dist/
+backend/dist/
+dist-ssr/
+frontend/.vite/
+backend/.vite/
+
+# Environment files
+.env
+.env.*
+frontend/.env
+frontend/.env.*
+backend/.env
+backend/.env.*
+
+# Logs and reports
+*.log
+logs/
+*.lcov
+
+# Caches and temp files
+coverage/
+*.tsbuildinfo
+.eslintcache
+frontend/.eslintcache
+backend/.eslintcache
+
+# Editor and OS files
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# Package manager artifacts
+*.tgz
